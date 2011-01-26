@@ -17,6 +17,7 @@ def rabi(qubit,durations,data = None,variable ="p1x",f_sb = -0.1,amplitude = 1.0
   data.setName("Rabi Sequence - %s" % qubit.name())
   qubit.setDriveFrequency(qubit.parameters()["frequencies.f01"]+f_sb)
   qubit.setDriveAmplitude(I = amplitude,Q = amplitude)
+  qubit.turnOnDrive()
   try:
     for duration in durations:
       qubit.loadRabiPulse(length = duration,readout = qubit.parameters()["timing.readout"],f_sb = f_sb)
@@ -27,12 +28,15 @@ def rabi(qubit,durations,data = None,variable ="p1x",f_sb = -0.1,amplitude = 1.0
       data.set(**acqiris.Psw())
       data.commit()
   finally:
-    params = fitRabiFrequency(data,variable)
-    qubit.parameters()["pulses.xy.t_pi"] = params[1]/2.0-params[4]
-    qubit.parameters()["pulses.xy.drive_amplitude"] = amplitude
-    qubit.parameters()["pulses.xy.f_sb"] = f_sb
-    data.parameters()["rabiFit"] = params
-    qubit.loadRabiPulse(phase = math.pi,readout = qubit.parameters()["timing.readout"],f_sb = f_sb)
+    try:
+      params = fitRabiFrequency(data,variable)
+      qubit.parameters()["pulses.xy.t_pi"] = params[1]/2.0-params[4]
+      qubit.parameters()["pulses.xy.drive_amplitude"] = amplitude
+      qubit.parameters()["pulses.xy.f_sb"] = f_sb
+      data.parameters()["rabiFit"] = params
+      qubit.loadRabiPulse(phase = math.pi,readout = qubit.parameters()["timing.readout"],f_sb = f_sb)
+    except:
+      pass
     data.savetxt()
   return data
 
@@ -77,6 +81,34 @@ def rabi12(qubit,durations,data = None,variable ="p1x",f_sb = -0.1,amplitude = 1
     data.savetxt()
   return data
 
+def rabi02(qubit,durations,data = None,variable ="p1x",f_sb = -0.1,amplitude = 1.0,averaging = 20,delay = 0,callback = None):
+
+  from instruments.qubit import PulseSequence
+
+  if data == None:
+    data = Datacube()
+  data.setParameters(instrumentManager.parameters())
+  data.setName("Rabi Sequence 02 - %s" % qubit.name())
+  f_sb_12 = f_sb-qubit.parameters()["frequencies.f02"]+qubit.parameters()["frequencies.f01"]*2
+  qubit.setDriveFrequency(qubit.parameters()["frequencies.f01"]+f_sb)
+  qubit.setDriveAmplitude(I = amplitude,Q = amplitude)
+  pi12Length = len(qubit.generateRabiPulse(phase = qubit.parameters()["pulses.xy.t_pi12"],f_sb = f_sb))
+  try:
+    for duration in durations:
+      pulseLength = len(qubit.generateRabiPulse(length = duration,f_sb = f_sb_12))
+      seq = PulseSequence()
+      seq.addPulse(qubit.generateRabiPulse(length = duration,delay = qubit.parameters()["timing.readout"]-pulseLength-pi12Length,f_sb = f_sb))
+      seq.addPulse(qubit.generateRabiPulse(length = qubit.parameters()["pulses.xy.t_pi12"],delay = qubit.parameters()["timing.readout"]-pi12Length,f_sb = f_sb_12))
+      qubit.loadWaveform(seq.getWaveform(),readout = qubit.parameters()["timing.readout"])
+      if callback != None:
+        callback(duration)
+      acqiris.bifurcationMap(ntimes = averaging)
+      data.set(duration = duration)
+      data.set(**acqiris.Psw())
+      data.commit()
+  finally:
+    data.savetxt()
+  return data
 
 def ramsey(delays,cube = None,ntimes = 20,length = 20):
 	if cube == None:
@@ -111,16 +143,18 @@ def T1(qubit,delays,data = None,averaging = 20,variable = "p1x"):
   return data
 	
 
-def measureSpectroscopy(qubit,frequencies,data = None,ntimes = 20,amplitude = 0.1):
+def measureSpectroscopy(qubit,frequencies,data = None,ntimes = 20,amplitude = 0.1,measureAtReadout = False,delay = 0,f_sb = 0):
   if data == None:
     data = Datacube()
-  data.setName("Spectroscopy - %s" % qubit.name())
-  qubit.loadRabiPulse(length = 500,readout = qubit.parameters()["timing.readout"],f_sb = 0)
+  if measureAtReadout:
+    qubit.loadRabiPulse(length = 500,readout = qubit.parameters()["timing.readout"]+500,f_sb = f_sb,delay = delay)
+  else:
+    qubit.loadRabiPulse(length = 500,readout = qubit.parameters()["timing.readout"],f_sb = f_sb,delay = delay)
   qubit.turnOnDrive()
   data.setParameters(instrumentManager.parameters())
   try:
     for f in frequencies:
-      qubit.setDriveFrequency(f)
+      qubit.setDriveFrequency(f+f_sb)
       qubit.setDriveAmplitude(I = amplitude,Q = amplitude)
       acqiris.bifurcationMap(ntimes = ntimes)
       data.set(f = f)
@@ -129,22 +163,30 @@ def measureSpectroscopy(qubit,frequencies,data = None,ntimes = 20,amplitude = 0.
   finally:
     return data
 
-def spectroscopy(qubit,frequencies,data = None,ntimes = 20,amplitude = 0.1,variable = "p1x"):
+def spectroscopy(qubit,frequencies,data = None,ntimes = 20,amplitude = 0.1,variable = "p1x",measureAtReadout = False,delay = 0,f_sb = 0,measure20 = True):
   if data == None:
     data = Datacube()
-  data.setName("Spectroscopy - %s" % qubit.name())
-  measureSpectroscopy(qubit = qubit,frequencies = frequencies,data = data,amplitude = amplitude)
+  if measureAtReadout:
+    data.setName("Spectroscopy at Readout - %s" % qubit.name())
+  else:
+    data.setName("Spectroscopy - %s" % qubit.name())
+  measureSpectroscopy(qubit = qubit,frequencies = frequencies,data = data,amplitude = amplitude,measureAtReadout = measureAtReadout,delay = delay,f_sb = f_sb)
   (params,rsquare) = fitQubitFrequency(data,variable)
-  qubit.parameters()["frequencies.f01"] = params[1]
-  qubit.setDriveFrequency(params[1])
+  if measureAtReadout:
+    qubit.parameters()["frequencies.readout.f01"] = params[1]
+  else: 
+    qubit.parameters()["frequencies.f01"] = params[1]
+    qubit.setDriveFrequency(params[1])
   data.setName(data.name()+ " - f01 = %g GHz" % params[1])
-  data02 = Datacube("Spectroscopy of (0->2)/2 transition")
-  data.addChild(data02)
-  frequencies02 = arange(params[1]-0.2,params[1]-0.05,0.002)
-  measureSpectroscopy(qubit = qubit,frequencies = frequencies02,data = data02,amplitude = amplitude*5.0)
-  (params02,rsquare02) = fitQubitFrequency(data02,variable)
-  qubit.parameters()["frequencies.f02"] = params02[1]*2.0
-  data.setName(data.name()+" - f02/2 = %g GHz" % params02[1])
+  if not measureAtReadout:
+    if measure20:
+      data02 = Datacube("Spectroscopy of (0->2)_2 transition")
+      data.addChild(data02)
+      frequencies02 = arange(params[1]-0.2,params[1]-0.05,0.001)
+      measureSpectroscopy(qubit = qubit,frequencies = frequencies02,data = data02,amplitude = amplitude*10.0,measureAtReadout = measureAtReadout,delay = delay,f_sb = f_sb)
+      (params02,rsquare02) = fitQubitFrequency(data02,variable)
+      qubit.parameters()["frequencies.f02"] = params02[1]*2.0
+      data.setName(data.name()+" - f02_2 = %g GHz" % params02[1])
   data.savetxt()
   return data
 
@@ -176,7 +218,7 @@ def sCurves(qubit,jba,variable = "p1x",data = None,ntimes = 20,optimize = "v20")
       acqiris.bifurcationMap()
       p = acqiris.Psw()[variable]
     vmin = v
-    return (vmin*0.9,vmax*1.1)
+    return (vmin*0.95,vmax*1.2)
 
   try:
     v0 = jba.voltage()
@@ -221,13 +263,20 @@ def sCurves(qubit,jba,variable = "p1x",data = None,ntimes = 20,optimize = "v20")
     qubit.parameters()["readout.v10"] = s1.column("v")[argmax(s1.column("contrast10"))]
     
     if optimize == "v20" and not failed12:
-      v0 = s1.column("v")[argmax(s1.column("contrast20"))]
+      imax = argmax(s1.column("contrast20"))
+      qubit.parameters()["readout.p11"] = s2.column(variable)[imax]
+      v0 = s1.column("v")[imax]
     elif optimize == "v21" and not failed12:
-      v0 = s1.column("v")[argmax(s1.column("contrast21"))]
+      imax = argmax(s1.column("contrast21"))
+      v0 = s1.column("v")[imax]
     else:
-      v0 = s1.column("v")[argmax(s1.column("contrast10"))]
+      imax = argmax(s1.column("contrast10"))
+      qubit.parameters()["readout.p11"] = s1.column(variable)[imax]
+      v0 = s1.column("v")[imax]
     
     #To do: Add dialog to ask to which voltage (v10,v20,v21) in 
+    
+    qubit.parameters()["readout.p00"] = 1.0-s0.column(variable)[imax]
 
     return (sData,v0)
     
@@ -236,12 +285,15 @@ def sCurves(qubit,jba,variable = "p1x",data = None,ntimes = 20,optimize = "v20")
     data.savetxt()
 
 def measureSingleS(voltages,data,jba,ntimes = 20):
-  for v in voltages:
-    jba.setVoltage(v)
-    acqiris.bifurcationMap(ntimes = ntimes)
-    data.set(**(acqiris.Psw()))
-    data.set(v = v)
-    data.commit()
+  try:
+    for v in voltages:
+      jba.setVoltage(v)
+      acqiris.bifurcationMap(ntimes = ntimes)
+      data.set(**(acqiris.Psw()))
+      data.set(v = v)
+      data.commit()
+  finally:
+    pass
 
 def loadPi012Pulse(qubit):
   from instruments.qubit import PulseSequence

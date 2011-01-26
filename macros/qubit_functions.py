@@ -387,7 +387,7 @@ def fitRabi12(fs,p1,ps = None):
   integral = 0
   lastIntegralValue = None
   signChanges = 0
-  period = 18
+  period = None
   for i in range(1,len(fs)-1):
     v = (p1[i]+p1[i+1]+p1[i-1])/3.0
     integral+=v-avg

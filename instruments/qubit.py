@@ -295,7 +295,6 @@ class Instr(Instrument):
           raise QubitException("Readout delay is negative!")
         self._params['readoutDelay'] = float(delay)
         markers = numpy.zeros((self._repetitionPeriod),dtype = numpy.uint8) + 3
-        safetyMargin = self._params["driveWaitTime"]
         markers[0:len(markers)-1000]-=1
         markers[offset+delay:offset+delay+200]-=2
         self._awg.updateMarkers(self._params["readoutMarkerWaveform"],markers)
@@ -374,6 +373,7 @@ class Instr(Instrument):
         self._fluxline.writeWaveform(self._fluxlineWaveform,fullWaveform)
         self._fluxline.setWaveform(self._fluxlineWaveform)
         self._fluxline.setPeriod(len(fullWaveform)/2.0)
+        self.setFluxlineDelay(0)
         self._outputWaveforms["fluxline"] = fullWaveform
         self.notify("fluxlineWaveform",fullWaveform)
         return fullWaveform
@@ -399,12 +399,9 @@ class Instr(Instrument):
         iChannel[safetyMargin:safetyMargin+len(iqWaveform)] = numpy.real(iqWaveform)
         qChannel[safetyMargin:safetyMargin+len(iqWaveform)] = numpy.imag(iqWaveform)
         #Flux pulse trigger and readout trigger
+        
         iMarkers[1:-1]-=3 
         qMarkers[1:-1]-=1
-        
-        offset = self._params['driveWaitTime']-self._jba.internalDelay()
-        
-        qMarkers[offset+readout:offset+readout+200]-=2
 
         if not "I" in self._outputWaveforms["drive"] or not numpy.allclose(iChannel,self._outputWaveforms["drive"]["I"]) or not numpy.allclose(iMarkers,self._outputWaveforms["drive"]["markers"]["I"]):
           iData = self._awg.writeRealData(iChannel,iMarkers)
@@ -436,7 +433,7 @@ class Instr(Instrument):
         return (finalIqWaveform,iMarkers,qMarkers)
         
       def driveWaveform(self):
-        return (self._outputWaveforms["drive"]["I"],self._outputWaveforms["drive"]["Q"],self._outputWaveforms["drive"]["markers"])
+        return self._waveforms["drive"]
                 
       def updateWaveforms(self):
         try:
@@ -505,8 +502,9 @@ class Instr(Instrument):
         self._outputWaveforms["drive"]["markers"] = dict()
         
         
-        self._params["driveWaitTime"] = 400
+        self._params["driveWaitTime"] = 2000
         self._params['fluxlineWaitTime'] = 50
+        self._params["fluxlineInternalDelay"] = 130
 
         self._params["readoutMarkerWaveform"] = readoutMarkerWaveform
         self._params["readoutMarkerChannel"] = 1

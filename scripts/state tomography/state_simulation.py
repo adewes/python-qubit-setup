@@ -85,8 +85,8 @@ else:
 #detector1 = matrix([[qubit1.parameters()["readout.p00"],1-qubit1.parameters()["readout.p11"]],[1-qubit1.parameters()["readout.p00"],qubit1.parameters()["readout.p11"]]])
 #detector2 = matrix([[qubit2.parameters()["readout.p00"],1-qubit2.parameters()["readout.p11"]],[1-qubit2.parameters()["readout.p00"],qubit2.parameters()["readout.p11"]]])
 
-detector1 = matrix([[0.85,0.23],[0.15,0.77]])
-detector2 = matrix([[0.77,0.23],[0.23,0.77]])
+detector1 = matrix([[tomographyData.parameters()["qubit1"]["readout.p00"],1.0-tomographyData.parameters()["qubit1"]["readout.p11"]],[1.0-tomographyData.parameters()["qubit1"]["readout.p00"],tomographyData.parameters()["qubit1"]["readout.p11"]]])
+detector2 = matrix([[tomographyData.parameters()["qubit2"]["readout.p00"],1.0-tomographyData.parameters()["qubit2"]["readout.p11"]],[1.0-tomographyData.parameters()["qubit2"]["readout.p00"],tomographyData.parameters()["qubit2"]["readout.p11"]]])
 
 detectorFunction = tensor(detector1,detector2)
 
@@ -100,7 +100,7 @@ inverseDetectorFunction = numpy.linalg.inv(detectorFunction)
 measuredTimes = []
 
 measuredSpins = Datacube("Measured spins")
-dataManager.addDatacube(measuredSpins)
+#dataManager.addDatacube(measuredSpins)
 
 probabilityMeasurements = []
 
@@ -123,7 +123,7 @@ for t in range(0,len(tomographyData)):
 			if i == "i" and j == "i":
 				measuredSpins.set(**{i+j:1})
 			elif i == "i":
-				probs = matrix([tomographyData.column("z"+j+"p00")[row],tomographyData.column("z"+j+"p10")[row],tomographyData.column("z"+j+"p01")[row],tomographyData.column("z"+j+"p11")[row]])
+				probs = matrix([tomographyData.column("z"+j+"p00")[row],tomographyData.column("z"+j+"p10")[row],tomographyData.column("z"+j+"p01")[row],tomographyData.column("z"+j+"p11")[row]])	
 				mapping = matrix([1,1,-1,-1])
 			elif j == "i":			
 				probs = matrix([tomographyData.column(i+"z"+"p00")[row],tomographyData.column(i+"z"+"p10")[row],tomographyData.column(i+"z"+"p01")[row],tomographyData.column(i+"z"+"p11")[row]])
@@ -154,13 +154,13 @@ def error_function(x,measurements,measured):
 		measurement = measurements[i]
 		expected = real(trace(rho*measurement))
 		p = (expected+1.0)/2.0
-		p10 = 0.2*0.2
-		p11 = 0.8*0.8
-		var = p*p*pow((p10-p11),2)+p11*p11+2.0*p11*p*(p10-p11)-p11-p*(p10-p11)
-		var = -var
+#		p10 = qubit1.parameters()["readout.p11"]*qubit2.parameters()["readout.p11"]
+#		p11 = qubit1.parameters()["readout.p11"]*qubit2.parameters()["readout.p11"]
+#		var = p*p*pow((p10-p11),2)+p11*p11+2.0*p11*p*(p10-p11)-p11-p*(p10-p11)
+#		var = -var
 #		D = transpose(detectorFunction)*detectorFunction
 #		var = 1e-1+trace(rho*measurement*measurement)-pow(trace(rho*measurement),2.0)
-#		var = 0.1+max(0,p*(1.0-p))
+		var = 0.1+max(0,p*(1.0-p))
 		v[i]=pow(expected-measured[i],2.0)/var
 	return v
 
@@ -210,7 +210,7 @@ densityMatrix = None
 
 import numpy.random
 
-for t in [26]:
+for t in [0]:
 	print "t = %g " % t
 	measuredValues = measuredTimes[t]
 	timeData.set(t = t)

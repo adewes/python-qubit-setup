@@ -20,41 +20,49 @@ class Instr(Instrument):
     self._afg.setTriggerDelay(0)
     
   def internalDelay(self):
-    return self._params["internalDelay"]
+    return self._params["internalDelay"]+self._params["starkPulseLength"]+self._params["starkPulseDelay"]
     
   def saveState(self,name):
-    return self._params
+    state = dict()
+    state["params"] = copy.deepcopy(self._params)
+    state["readoutWaveform"] = copy.deepcopy(self._readoutWaveform)
+    return state
     
   def restoreState(self,state):
-    self._params = state
+    self._params = copy.deepcopy(state["params"])
+    self._readoutWaveform = copy.deepcopy(state["readoutWaveform"])
 #    self.loadReadoutWaveform(self._params["measureTime"],self._params["riseTime"],self._params["fallTime"],self._params["latchTime"],self._params["latchHeight"])
     
   def readoutDuration(self):
     return self._params["readoutWindowStart"]+self._params["measureTime"]
     
-  def loadReadoutWaveform(self,measureTime = 20,riseTime = 20,fallTime = 30,latchTime = 2000,latchHeight = 0.8,acquisitionTime = 250,waitTime = 0,fallTime2 = 10,safetyMargin = 100):
-    waveformLength = 1+(waitTime+measureTime+latchTime+riseTime+fallTime+fallTime2)*2
-    waveform = zeros((waveformLength),dtype = uint16)
-    waveform[waitTime*2+1:riseTime*2+1] = linspace(0,(1<<14) - 1,riseTime*2)
-    waveform[waitTime*2+1+riseTime*2:measureTime*2+1+riseTime*2] = (1<<14) - 1
-    waveform[waitTime*2+measureTime*2+1+riseTime*2:measureTime*2+1+riseTime*2+fallTime*2] = linspace((1<<14) - 1,((1<<14)-1)*latchHeight,fallTime*2)
-    waveform[waitTime*2+measureTime*2+1+riseTime*2+fallTime*2:-fallTime*2] = int((float(1<<14)-1)*latchHeight)
-    waveform[-fallTime*2:] = linspace(int((float(1<<14)-1)*latchHeight),0,fallTime*2)
-    self._afg.writeWaveform(self._waveform,waveform)
+  def loadReadoutWaveform(self,measureTime = 200,riseTime = 20,fallTime = 30,latchTime = 2000,starkPulseLength = 0,starkPulseHeight = 0,starkPulseDelay = 0,scale = 1.0,latchHeight = 0.8,acquisitionTime = 250,waitTime = 0,fallTime2 = 10,safetyMargin = 100):
+    waveformLength = 1+(waitTime+measureTime+latchTime+riseTime+fallTime+fallTime2+starkPulseLength+starkPulseDelay)*2
+    fullWaveform = zeros((waveformLength),dtype = uint16)
+    waveform = fullWaveform[(starkPulseLength+starkPulseDelay+waitTime)*2:]
+    fullWaveform[1+waitTime*2:(waitTime+starkPulseLength)*2.0] = starkPulseHeight*((1<<14) - 1)
+    waveform[1:riseTime*2+1] = linspace(0,(1<<14) - 1,riseTime*2)*scale
+    waveform[1+riseTime*2:measureTime*2+1+riseTime*2] = ((1<<14) - 1)*scale
+    waveform[measureTime*2+1+riseTime*2:measureTime*2+1+riseTime*2+fallTime*2] = linspace((1<<14) - 1,((1<<14)-1)*latchHeight,fallTime*2)*scale
+    waveform[measureTime*2+1+riseTime*2+fallTime*2:-fallTime*2] = int((float(1<<14)-1)*latchHeight)*scale
+    waveform[-fallTime*2:] = linspace(int((float(1<<14)-1)*latchHeight),0,fallTime*2)*scale
+    self._afg.writeWaveform(self._waveform,fullWaveform)
     self._afg.setWaveform(self._waveform)
     self._afg.setPeriod(waveformLength/2.0)
     self._params["waitTime"] = waitTime
     self._params["riseTime"] = riseTime
     self._params["measureTime"] = measureTime
+    self._params["starkPulseLength"] = starkPulseLength
+    self._params["starkPulseDelay"] = starkPulseDelay
+    self._params["starkPulseHeight"] = starkPulseHeight
     self._params["fallTime"] = fallTime
     self._params["latchTime"] = latchTime
     self._params["latchHeight"] = latchHeight
     self._params["fallTime2"] = fallTime2
     self._params["safetyMargin"] = safetyMargin
-    self._params["readoutWindowStart"] = self._params["internalDelay"]+self._params["returnDelay"]+riseTime+measureTime+fallTime+self._params["safetyMargin"]
-    
-    self._readoutWaveform = waveform
-    self.notify("readoutWaveform",waveform)
+    self._params["readoutWindowStart"] = self._params["internalDelay"]+self._params["returnDelay"]+riseTime+measureTime+fallTime+self._params["safetyMargin"]+starkPulseLength+waitTime+starkPulseDelay
+    self._readoutWaveform = fullWaveform
+    self.notify("readoutWaveform",fullWaveform)
     self._acqiris.ConfigureV2(**{"delayTime":(self._params["readoutWindowStart"])*1e-9})
     
   def updateReadoutWaveform(self):
