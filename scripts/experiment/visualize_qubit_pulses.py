@@ -14,7 +14,7 @@ axvline(qubit1.readoutDelay(),ls = "-.")
 legend(("Q1 I","Q1 Q"))
 
 #Qubit 2
-
+		
 subplot(412,sharex = ax1)
 plot(real(qubit2.driveWaveform()))
 plot(imag(qubit2.driveWaveform()))
@@ -26,7 +26,7 @@ legend(("Q2 I","Q2 Q"))
 
 subplot(413,sharex = ax1)
 plot(array(qubit1.fluxlineWaveform())*afg1.amplitude()/2.0+afg1.offset())
-plot(array(qubit2.fluxlineWaveform())*afg1.amplitude()/2.0+afg1.offset())
+plot(array(qubit2.fluxlineWaveform())*afg2.amplitude()/2.0+afg2.offset())
 axvline(qubit1.readoutDelay(),ls = "-.")
 axvline(qubit2.readoutDelay(),ls = "-.")
 
