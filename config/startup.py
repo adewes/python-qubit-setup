@@ -9,7 +9,7 @@ def importModule(name):
 	exec("from %s import *\n" % name,globals(),globals())
 
 
-importModule("config.parameters")
+importModule("pyview.config.parameters")
 importModule("config.instruments")
 importModule("macros.qubit_functions")
 importModule("macros.iq_level_optimization")

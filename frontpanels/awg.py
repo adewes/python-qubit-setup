@@ -5,8 +5,9 @@ sys.path.append('.')
 sys.path.append('../')
 
 from pyview.lib.classes import *
-from pyview.lib.canvas import *
-from pyview.ide.codeeditor import *
+from pyview.ide.frontpanel import FrontPanel
+from pyview.ide.mpl.canvas import *
+from pyview.ide.editor.codeeditor import *
 import string
 
 import re

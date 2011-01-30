@@ -18,7 +18,7 @@ from pyview.config.parameters import params
 
 print "Initializing instruments..."
 
-serverHost = "192.168.0.11:8000"
+serverHost = "127.0.0.1:8000"
 
 instrumentManager = Manager()
 

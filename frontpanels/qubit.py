@@ -7,6 +7,7 @@ sys.path.append('../')
 from pyview.lib.classes import *
 from numpy import *
 from pyview.conf.parameters import *
+from pyview.ide.frontpanel import FrontPanel
 from pyview.ide.elements.numericedit import * 
 import PyQt4.uic as uic
 if 'pyview.scripts.xyplot' in sys.modules:

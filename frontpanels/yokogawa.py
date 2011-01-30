@@ -4,6 +4,7 @@ sys.path.append('.')
 sys.path.append('../')
 
 from pyview.lib.classes import *
+from pyview.ide.frontpanel import FrontPanel
 from pyview.ide.elements.numericedit import * 
 
 import datetime

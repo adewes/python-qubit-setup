@@ -13,13 +13,14 @@ from pyview.lib.datacube import Datacube
 import sys
 import time
 
-class IqOptimization(Macro):
+class IqOptimization(Reloadable):
   
   """
   Optimizes the parameters of an IQ mixer.
   """
   
   def __init__(self,mwg,fsp,awg,channels = [1,2]):
+    Reloadable.__init__(self)
     self._mwg = mwg
     self._fsp = fsp
     self._awg = awg
