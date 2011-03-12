@@ -8,10 +8,10 @@ dataManager = DataManager()
 Delta = 0.0
 g = 0.01*2.0*math.pi
 
-gamma1 = 1.0/450.0
-gamma2 = 1.0/375.0
-gammaphi1 = 1.0/350.0
-gammaphi2 = 1.0/350.0
+gamma1 = 1.0/303.4
+gamma2 = 1.0/368.7
+gammaphi1 = 1.0/500.0
+gammaphi2 = 1.0/650.0
 
 ##Some more definitions...
 
@@ -44,13 +44,14 @@ L = L1+L2+L3+L4
 
 ##The simulation...
 
-state = eg
+state = tensor(gs,es)
 
 state = state/norm(state)
 
 rho = vectorizeRho(adjoint(state)*state)
 
 cube = Datacube("master equation simulation")
+cube.parameters()["defaultPlot"]=[["t","zzp00"],["t","zzp01"],["t","zzp10"],["t","zzp11"]]
 
 dataManager.addDatacube(cube)
 
@@ -75,18 +76,18 @@ detector2 = matrix([[0.9,0.05],[0.1,0.95]])
 
 detectorFunction = tensor(detector2,detector1)
 
-#detectorFunction = eye(4)
+detectorFunction = eye(4)
 
 stateLabels = ["00","10","01","11"]
 
-for i in range(0,800.0/dt):
+for i in range(0,200.0/dt):
 
 	if t < 0:
 	
 		extra = 	0.5/math.pi*(tensor(sigmax,idatom)*cos(Delta*t/math.pi/2.0)+tensor(sigmay,idatom)*sin(Delta*t/math.pi/2.0))
 	else:
 		extra = 0
-		g = 0.092/math.pi*2.0
+		g = 0.1/math.pi*2.0
 
 	H = -Delta/2.0*sz1+Delta/2.0*sz2+g/2.0*(sp1*sm2+sm1*sp2)+extra
 	LH = -1.j*(spre(H)-spost(H))
@@ -99,9 +100,12 @@ for i in range(0,800.0/dt):
 	#Now the calculate all kinds of variables...
 
 	cube.set(t = t)
-	ms1 = [sigmax,sigmay,sigmaz]
-	ms2 = [sigmax,sigmay,sigmaz]
-	labels = ["x","y","z"]
+	ms1 = [sigmaz]
+	ms2 = [sigmaz]
+#	ms1 = [sigmax,sigmay,sigmaz,idatom]
+#	ms2 = [sigmax,sigmay,sigmaz,idatom]
+#	labels = ["x","y","z","i"]
+	labels = ["z"]
 	result_labels = {-1:"1",1:"0"}
 	
 	phi = math.pi*t/100.0
@@ -116,6 +120,8 @@ for i in range(0,800.0/dt):
 			keys = []
 			for result_a in ma:
 				for result_b in mb:
+					if not result_a in ma or not result_b in mb:
+						continue
 					m = tensor(ma[result_a],mb[result_b])
 #Rotate the state along z:
 #					r1 = matrix([[cos(phi/2.0)-1j*sin(phi/2.0),0],[0,cos(phi/2.0)+1j*sin(phi/2.0)]])
@@ -126,11 +132,13 @@ for i in range(0,800.0/dt):
 					results.append(E)
 					keys.append(mlabel+"p"+result_labels[result_a]+result_labels[result_b])
 #					cube.set(**{mlabel+"p"+result_labels[result_a]+result_labels[result_b] : E})	
+			cube.set(**{mlabel:trace(rhomat*tensor(ms1[a],ms1[b]))})
+			if len(results) < 4:
+				continue
 			results = transpose(matrix(results))
 			detectedResults = detectorFunction*results
 			for i in range(0,len(keys)):
 				cube.set(**{keys[i]:detectedResults[i,0]})
-			cube.set(**{mlabel:trace(rhomat*tensor(ms1[a],ms1[b]))})
 
 	for a in range(0,4):
 		for b in range(0,4):

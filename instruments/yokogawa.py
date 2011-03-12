@@ -34,7 +34,7 @@ class Instr(VisaInstrument):
         if math.fabs(value) > 50.0: 
           raise "Error! Voltage is too high!"
         if slewRate == None:
-          self.write("S%g;E" % value)
+          self.write("S%f;E" % value)
         else:
           v = self.voltage()
           while math.fabs(v - value)>0.001:
@@ -44,14 +44,14 @@ class Instr(VisaInstrument):
                 v-=slewRate*0.1
               else:
                 v=value
-              self.write("S%g;E" % v)
+              self.write("S%f;E" % v)
               v = self.voltage()
             elif v < value:
               if value-v > slewRate*0.1:
                 v+=slewRate*0.1
               else:
                 v = value
-              self.write("S%g;E" % v)
+              self.write("S%f;E" % v)
               v = self.voltage()
                 
         return self.voltage()

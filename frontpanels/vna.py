@@ -4,7 +4,8 @@ sys.path.append('.')
 sys.path.append('../')
 
 from pyview.lib.classes import *
-from pyview.lib.canvas import *
+from pyview.ide.mpl.canvas import *
+from pyview.ide.frontpanel import FrontPanel
 import string
 
 from datetime import *

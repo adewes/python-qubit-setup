@@ -42,7 +42,7 @@ class Instr(VisaInstrument):
     return float(self.ask("TRIG:TIM?"))
     
   def setTriggerInterval(self,interval):
-    self.write("TRIG:TIM %g" % interval)
+    self.write("TRIG:TIM %f" % interval)
   
   def saveState(self,name):
     """
@@ -75,13 +75,13 @@ class Instr(VisaInstrument):
     """
     Starts the AWG.
     """
-    self.write("AWGControl:RUN")
+    self.write("AWGControl:RUN:IMM")
     
   def stopAWG(self):
     """
     Stops the AWG.
     """
-    self.write("AWGControl:STOP")
+    self.write("AWGControl:STOP:IMM")
         
   def setups(self):
     """
@@ -184,7 +184,7 @@ class Instr(VisaInstrument):
     """
     Sets the phase of a given channel.
     """
-    self.write("SOURCE%d:PHASE:ADJUST %g" % phase)
+    self.write("SOURCE%d:PHASE:ADJUST %f" % phase)
     
   def waveform(self,channel):
     """
@@ -196,7 +196,7 @@ class Instr(VisaInstrument):
     """
     Sets the repetition rate of the AWG.
     """
-    self.write("AWGControl:RRate %g" % rate)
+    self.write("AWGControl:RRate %f" % rate)
     
   def repetitionRate(self):
     """
@@ -250,25 +250,25 @@ class Instr(VisaInstrument):
     """
     Sets the low voltage of a given channel.
     """
-    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:LOW %g" % (channel,voltage))
+    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:LOW %f" % (channel,voltage))
 
   def setHigh(self,channel,voltage):
     """
     Sets the high voltage of a given channel.
     """
-    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:HIGH %g" % (channel,voltage))
+    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:HIGH %f" % (channel,voltage))
 
   def setAmplitude(self,channel,voltage):
     """
     Sets the amplitude of a given channel.
     """
-    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:AMPLITUDE %g" % (channel,voltage))
+    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:AMPLITUDE %f" % (channel,voltage))
     
   def setOffset(self,channel,voltage):
     """
     Sets the offset of a given channel.
     """
-    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:OFFSET %g" % (channel,voltage))
+    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:OFFSET %f" % (channel,voltage))
 
   def low(self,channel):
     """
@@ -281,6 +281,46 @@ class Instr(VisaInstrument):
     Returns the high voltage of a given channel.
     """
     return float(self.ask("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:HIGH?" % channel))
+
+  def markerLow(self,channel,marker):
+    return float(self.ask("SOURCE%d:MARKER%d:VOLTAGE:LEVEL:IMMEDIATE:LOW?" % (channel,marker)))
+
+  def markerHigh(self,channel,marker):
+    return float(self.ask("SOURCE%d:MARKER%d:VOLTAGE:LEVEL:IMMEDIATE:HIGH?" % (channel,marker)))
+
+  def setMarkerHigh(self,channel,marker,voltage):
+    self.write("SOURCE%d:MARKER%d:VOLTAGE:LEVEL:IMMEDIATE:HIGH %f" % (channel,marker,voltage))
+
+  def setMarkerLow(self,channel,marker,voltage):
+    self.write("SOURCE%d:MARKER%d:VOLTAGE:LEVEL:IMMEDIATE:LOW %f" % (channel,marker,voltage))
+
+  """
+  Convenience functions for querying the marker values:
+  """
+
+  def marker1High(self,channel):
+    return self.markerHigh(channel,1)
+
+  def marker1Low(self,channel):
+    return self.markerLow(channel,1)
+
+  def marker2High(self,channel):
+    return self.markerHigh(channel,2)
+
+  def marker2Low(self,channel):
+    return self.markerLow(channel,2)
+
+  def setMarker1High(self,channel,voltage):
+    return self.setMarkerHigh(channel,1,voltage)
+
+  def setMarker1Low(self,channel,voltage):
+    return self.setMarkerLow(channel,1,voltage)
+
+  def setMarker2High(self,channel,voltage):
+    return self.setMarkerHigh(channel,2,voltage)
+
+  def setMarker2Low(self,channel,voltage):
+    return self.setMarkerLow(channel,2,voltage)
 
   def amplitude(self,channel):
     """
@@ -437,7 +477,7 @@ class Instr(VisaInstrument):
     self.notify("waveformnames",self.waveformNames)
     return self.waveformNames
   
-  def getWaveforms(self):
+  def updateWaveforms(self):
     """
     Retrieves all waveforms from the AWG.
     """
@@ -451,16 +491,19 @@ class Instr(VisaInstrument):
         self.waveforms.append(waveform)
       except:
         print "An error occured.."
-    self.notify("waveforms",self.waveforms)
+    return self.waveforms
+    
+  def getWaveforms(self):
     return self.waveforms
   
-  def initialize(self):
+  def initialize(self,visaAddress = "TCPIP0::192.168.0.3::inst0"):
     """
     Initializes the AWG.
     """
     try:
       self.waveforms = []
       self._name = "Tektronix AWG"
-      self._visaAddress = "TCPIP0::192.168.0.3::inst0"
+      self._visaAddress = visaAddress
+      print "Initializing AWG with address %s" % visaAddress
     except:
       self.statusStr("An error has occured. Cannot initialize %s." % self._name)        

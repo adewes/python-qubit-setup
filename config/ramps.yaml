@@ -3,16 +3,31 @@ root:
   - children:
     - children: []
       codeSnippet: !!python/unicode "importModule(\"scripts.experiment.measure\")\n\
-        \nfluxes = arange(0.64,1.4,0.02)\n\nqubit = qubit1\njba = jba1\nafg = afg1\n\
-        freqs = list(arange(6.3,6.45,0.002))\nspectroAmp = 0.1\n\ndurations = arange(0,50,1.0)\n\
-        rabiAmp = 1.0\nf_sb = -0.1\nvariable = \"p1x\"\n\ndata.setName(\"Parameter\
-        \ Survey - %s\" % qubit.name())\n\nscripts.experiment.measure.parameterSurvey(rabiDurations\
-        \ = durations, freqs = freqs,rabiAmp = rabiAmp,spectroAmp = spectroAmp,variable\
-        \ = variable,data = data,jba = jba,qubit = qubit,generator =  lambda v,f =\
-        \ loadBaseWaveform,qubit = qubit,jba = jba,afg = afg: \tf(qubit = qubit,afg\
-        \ = afg,jba = jba,manipulationFlux = v,readoutFlux = v)\n,values = fluxes,f_sb\
-        \ = f_sb)\n"
+        \nimport time\ntime.sleep(60*10)\n\nfluxes = arange(0.92,1.4,0.02)\n\nqubit\
+        \ = qubit1\njba = jba1\nafg = afg1\nfreqs = list(arange(5.8,6.2,0.002))\n\
+        spectroAmp = 0.1\n\ndurations = arange(0,50,1.0)\nrabiAmp = 1.0\nf_sb = -0.1\n\
+        variable = \"p1x\"\n\ndata.setName(\"Parameter Survey - %s\" % qubit.name())\n\
+        \nscripts.experiment.measure.parameterSurvey(rabiDurations = durations, freqs\
+        \ = freqs,rabiAmp = rabiAmp,spectroAmp = spectroAmp,variable = variable,data\
+        \ = data,jba = jba,qubit = qubit,generator =  lambda v,f = loadBaseWaveform,qubit\
+        \ = qubit,jba = jba,afg = afg: \tf(qubit = qubit,afg = afg,jba = jba,manipulationFlux\
+        \ = v,readoutFlux = v)\n,values = fluxes,f_sb = f_sb)\n"
       name: Parameter Survey
+    - children: []
+      codeSnippet: !!python/unicode "importModule(\"scripts.experiment.measure\")\n\
+        \nfluxes = arange(-0.5,1.5,0.05)\n\nqubit = qubit1\njba = jba1\nafg = afg1\n\
+        freqs = list(arange(5.0,5.5,0.0002))\nspectroAmp = 0.1\nvariable = \"p1x\"\
+        \naveraging = 100\n\ndata.setName(\"Spectroscopy Survey - %s\" % qubit.name())\n\
+        \nfor flux in fluxes:\n\tloadBaseWaveform(qubit = qubit,afg = afg,jba = jba,parkFlux\
+        \ = 0.0,manipulationFlux = flux,readoutFlux = flux,readout = qubit.parameters()[\"\
+        timing.readout\"],compensationFactor = 0.8)\n\ttry:\n\t\tjba.calibrate()\n\
+        \texcept:\n\t\tcontinue\n\n\tsubcube = Datacube(\"flux = %g V\" % flux)\n\t\
+        \n\tdata.addChild(subcube)\n\tdata.set(flux = flux)\t\n\tscripts.experiment.measure.spectroscopy(qubit\
+        \ = qubit,data = subcube, variable = variable,frequencies = freqs, amplitude\
+        \ = spectroAmp,ntimes = averaging)\n\tif qubit.parameters()[\"frequencies.f01\"\
+        ] != None:\n\t\tdata.set(f01 = qubit.parameters()[\"frequencies.f01\"])\n\t\
+        data.commit()\n\tdata.savetxt()\n"
+      name: Spectroscopy Survey
     - children: []
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
 
@@ -28,30 +43,29 @@ root:
         = "p1x",data = data,amplitude = amp,f_sb = f_sb,averaging = 40)'
       name: Rabi 02
     - children: []
-      codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
-
-
-        durations = arange(0,200,0.5)
-
-        amp = 2.0
-
-        f_sb = -0.1
-
-
-        scripts.experiment.measure.rabi(qubit = qubit1,durations = durations,variable
-        = "p1x",data = data,amplitude = amp,f_sb = f_sb,averaging = 20)'
+      codeSnippet: !!python/unicode "importModule(\"scripts.experiment.measure\")\n\
+        \ndurations = arange(0,200,1.0)\n\namp = 2.1\n\nf01_1 = qubit1.parameters()[\"\
+        frequencies.f01\"]\nf01_2 = qubit2.parameters()[\"frequencies.f01\"]\n\nif\
+        \ not \"pulses.xy.f_sb\" in qubit2.parameters():\n\traise Exception(\"Please\
+        \ measure a Rabi oscillation on qubit II first!\")\n\nf_sb_2 = qubit2.parameters()[\"\
+        pulses.xy.f_sb\"]\n\nf_sb =  2*round((f01_1-f01_2)/2,1)+f01_2-f01_1+f_sb_2\n\
+        \n#f_sb = 0.1\n\nqubit1.parameters()[\"pulses.xy.f_sb\"]=float(f_sb)\n\nqubit1.parameters()[\"\
+        pulses.xy.useDrag\"] = False\n\nscripts.experiment.measure.rabi(qubit = qubit1,durations\
+        \ = durations,variable = \"p1x\",data = data,amplitude = amp,f_sb = f_sb,averaging\
+        \ = 20,compositePulse = False,gaussian = True,delay = 0,angle = math.pi/2.0*0)"
       name: Rabi
     - children: []
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
 
 
-        freqs = arange(5.9,6.75,0.002)
+        freqs = arange(6.,6.75,0.002)
 
-        amp = 0.1
+        amp = 0.2
 
 
         scripts.experiment.measure.spectroscopy(qubit = qubit1,frequencies = freqs,variable
-        = "p1x",data = data,ntimes = 20,amplitude = amp,measureAtReadout = True)'
+        = "p1x",data = data,ntimes = 20,amplitude = amp,measureAtReadout = True,measure20
+        = True,factor20 = 10)'
       name: Spectroscopy at Readout
     - children: []
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
@@ -71,34 +85,46 @@ root:
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
 
 
+        #Load a saturating pulse on qubit 2
+
+        qubit2.loadRabiPulse(phase = math.pi/2.0)
+
+        qubit2.turnOnDrive()
+
+
         scripts.experiment.measure.sCurves(qubit = qubit1,jba = jba1,variable = "p1x",data
-        = data,optimize = "v10")'
+        = data,optimize = "v10",step = 0.02,ntimes = 40,measureErrors = True)'
       name: S Curves
     - children: []
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
 
 
-        delays = list(arange(0,100,10))+list(arange(100,800,70))
+        delays = list(arange(0,200,10))+list(arange(200,600,20))+list(arange(600,3500,100))
+
 
         #scripts.experiment.measure.T1precis(qubit = qubit1,delays = delays,variable
         = "p1x",data = data, averaging=20)
 
         scripts.experiment.measure.T1(qubit = qubit1,delays = delays,variable = "p1x",data
-        = data, averaging=20)'
+        = data, averaging=20,gaussian = True)'
       name: T1
-    - children: []
-      codeSnippet: !!python/unicode ''
-      name: Ramsey
     - children: []
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
 
 
-        freqs = arange(5.45,6.5,0.002)
+        durations = arange(0,400,4.0)
 
-        amp = 0.1
 
-        scripts.experiment.measure.spectroscopy(qubit = qubit1,frequencies = freqs,variable
-        = "p1x",data = data,ntimes = 20,amplitude = amp,measureAtReadout = False)'
+        scripts.experiment.measure.ramsey(qubit = qubit1,durations = durations,variable
+        = "p1x",data = data,averaging = 40,angle = math.pi/2.0*0,amplitude = 0.0,f_offset
+        = 0.03,correctFrequency = True)'
+      name: Ramsey
+    - children: []
+      codeSnippet: !!python/unicode "importModule(\"scripts.experiment.measure\")\n\
+        \nfreqs = arange(5.4,6.5,0.002)\namp = 0.05\n\nqubit1.parameters()[\"pulses.xy.f_shift\"\
+        ]=0\n\nscripts.experiment.measure.spectroscopy(qubit = qubit1,frequencies\
+        \ = freqs,variable = \"p1x\",\tdata = data,ntimes = 20,amplitude = amp,measureAtReadout\
+        \ = False,measure20 = True)\n"
       name: Spectroscopy
     codeSnippet: !!python/unicode 'import time
 
@@ -107,15 +133,68 @@ root:
   - children:
     - children: []
       codeSnippet: !!python/unicode "importModule(\"scripts.experiment.measure\")\n\
-        \nfluxes = arange(0.95,1.6,0.02)\n\nqubit = qubit2\njba = jba2\nafg = afg2\n\
-        freqs = list(arange(6.0,6.5,0.002))\nspectroAmp = 0.1\n\ndurations = arange(0,50,1.0)\n\
+        \nfluxes = arange(1.465,1.45,-0.00025)\n\nqubit = qubit2\njba = jba2\nawgChannel\
+        \ = 2\nfreqs = list(arange(5.36,5.43,0.0002))\nspectroAmp = 0.02\nvariable\
+        \ = \"px1\"\naveraging = 60\nreadoutFlux = 1.0\n\ndata.setName(\"Spectroscopy\
+        \ Survey - %s\" % qubit.name())\n\nfor flux in fluxes:\n\tloadBaseWaveform(qubit\
+        \ = qubit,awgChannel = awgChannel,jba = jba,parkFlux = 0.0,manipulationFlux\
+        \ = flux,readoutFlux = readoutFlux,readout = qubit.parameters()[\"timing.readout\"\
+        ],compensationFactor = 1.2)\n\ttry:\n\t\tjba.calibrate(level = 0.1)\n\texcept:\n\
+        \t\tcontinue\n\n\tsubcube = Datacube(\"flux = %g V\" % flux)\n\t\n\tdata.addChild(subcube)\n\
+        \tdata.set(flux = flux)\t\n\tscripts.experiment.measure.spectroscopy(qubit\
+        \ = qubit,data = subcube, variable = variable,frequencies = freqs, amplitude\
+        \ = spectroAmp,ntimes = averaging,fitFrequency = False,measure20 = False)\n\
+        \tdata.commit()\n\tdata.savetxt()\n"
+      name: Spectroscopy Survey
+    - children: []
+      codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
+
+
+        freqs = arange(5.0,6.5,0.001)
+
+        amp = 0.02
+
+
+        qubit2.parameters()["pulses.xy.f_shift"]=0
+
+
+        scripts.experiment.measure.spectroscopy(qubit = qubit2,frequencies = freqs,variable
+        = "px1",data = data,ntimes = 80,amplitude = amp,measureAtReadout = False,measure20
+        = True)'
+      name: Spectroscopy
+    - children: []
+      codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
+
+
+        durations = arange(0,200,1)
+
+        amp = 1.9
+
+
+        f01 = qubit2.parameters()["frequencies.f01"]
+
+
+        f_sb = 0.1-(f01-round(f01,2))
+
+
+        qubit2.parameters()["pulses.xy.f_sb"]=float(f_sb)
+
+
+        scripts.experiment.measure.rabi(qubit = qubit2,durations = durations,variable
+        = "px1",data = data,amplitude = amp,f_sb = f_sb,averaging = 20,compositePulse
+        = False,gaussian = True,angle = math.pi/2.0*0)'
+      name: Rabi
+    - children: []
+      codeSnippet: !!python/unicode "importModule(\"scripts.experiment.measure\")\n\
+        \nfluxes = arange(1.52,-1.0,-0.02)\n\nqubit = qubit2\njba = jba2\nafg = afg2\n\
+        freqs = list(arange(4.5,6.2,0.002))\nspectroAmp = 0.1\n\ndurations = arange(0,50,1.0)\n\
         rabiAmp = 1.0\nf_sb = -0.1\nvariable = \"px1\"\n\ndata.setName(\"Parameter\
         \ Survey - %s\" % qubit.name())\n\nscripts.experiment.measure.parameterSurvey(rabiDurations\
         \ = durations, freqs = freqs,rabiAmp = rabiAmp,spectroAmp = spectroAmp,variable\
         \ = variable,data = data,jba = jba,qubit = qubit,generator =  lambda v,f =\
         \ loadBaseWaveform,qubit = qubit,jba = jba,afg = afg: \tf(qubit = qubit,afg\
         \ = afg,jba = jba,manipulationFlux = v,readoutFlux = v)\n,values = fluxes,f_sb\
-        \ = f_sb)\n"
+        \ = f_sb,autoRange = False)\n"
       name: Parameter Survey
     - children: []
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
@@ -123,11 +202,12 @@ root:
 
         freqs = arange(5.8,6.75,0.002)
 
-        amp = 0.05
+        amp = 0.02
 
 
         scripts.experiment.measure.spectroscopy(qubit = qubit2,frequencies = freqs,variable
-        = "px1",data = data,ntimes = 20,amplitude = amp,measureAtReadout = True)'
+        = "px1",data = data,ntimes = 20,amplitude = amp,measureAtReadout = True,measure20
+        = True,factor20 = 10)'
       name: Spectroscopy at Readout
     - children: []
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
@@ -144,7 +224,15 @@ root:
         = "px1",data = data,amplitude = amp,f_sb = f_sb,averaging = 40)'
       name: Rabi 02
     - children: []
-      codeSnippet: !!python/unicode ''
+      codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
+
+
+        durations = arange(0,600,2.0)
+
+
+        scripts.experiment.measure.ramsey(qubit = qubit2,durations = durations,variable
+        = "px1",data = data,averaging = 40,angle = math.pi/2.0,amplitude = 0.0,f_offset
+        = 0.03,correctFrequency = True)'
       name: Ramsey
     - children: []
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
@@ -164,48 +252,29 @@ root:
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
 
 
+        #Load a Pi/2 pulse on qubit 1
+
+        qubit1.loadRabiPulse(phase = math.pi/2)
+
+        qubit1.turnOnDrive()
+
+
         scripts.experiment.measure.sCurves(qubit = qubit2,jba = jba2,variable = "px1",data
-        = data,optimize = "v10")'
+        = data,optimize = "v10",step = 0.01,measureErrors = True,ntimes = 80)'
       name: S Curves
     - children: []
       codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
 
 
-        delays = list(arange(0,200,10))+list(arange(200,400,10))+list(arange(400,900,100))
+        delays = list(arange(0,100,10))+list(arange(100,400,20))+list(arange(400,3500,100))
 
 
         #scripts.experiment.measure.T1precis(qubit = qubit1,delays = delays,variable
         = "p1x",data = data, averaging=20)
 
         scripts.experiment.measure.T1(qubit = qubit2,delays = delays,variable = "px1",data
-        = data, averaging=20)'
+        = data, averaging=20,gaussian = True)'
       name: T1
-    - children: []
-      codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
-
-
-        durations = arange(0,200,0.5)
-
-        amp = 2.0
-
-        f_sb = -0.1
-
-
-        scripts.experiment.measure.rabi(qubit = qubit2,durations = durations,variable
-        = "px1",data = data,amplitude = amp,f_sb = f_sb,averaging = 10)'
-      name: Rabi
-    - children: []
-      codeSnippet: !!python/unicode 'importModule("scripts.experiment.measure")
-
-
-        freqs = arange(5.5,7.5,0.004)
-
-        amp = 0.1
-
-
-        scripts.experiment.measure.spectroscopy(qubit = qubit2,frequencies = freqs,variable
-        = "px1",data = data,ntimes = 20,amplitude = amp,measureAtReadout = False)'
-      name: Spectroscopy
     codeSnippet: !!python/unicode 'import time
 
       print "test"'

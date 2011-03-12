@@ -6,12 +6,10 @@ sys.path.append('../')
 
 from pyview.lib.classes import *
 from numpy import *
-from pyview.conf.parameters import *
-from pyview.ide.elements.numericedit import * 
-import PyQt4.uic as uic
-if 'pyview.scripts.xyplot' in sys.modules:
-  reload(sys.modules['pyview.scripts.xyplot'])
-from pyview.scripts.xyplot import *
+from pyview.config.parameters import *
+from pyview.ide.frontpanel import FrontPanel
+from pyview.ide.patterns import *
+from PyQt4.QtGui import *
 
 import datetime
 
@@ -20,29 +18,32 @@ import instruments
 class PulseVisualizer(QWidget,ObserverWidget):
   
   def updateDrivePlot(self):
-    self._drive.setData(0,list(linspace(0,len(self._waveforms["drive"]["I"]),len(self._waveforms["drive"]["I"]))),self._waveforms["drive"]["I"])
-    self._drive.setData(1,list(linspace(0,len(self._waveforms["drive"]["Q"]),len(self._waveforms["drive"]["Q"]))),self._waveforms["drive"]["Q"])
+    pass
+    #self._drive.setData(0,list(linspace(0,len(self._waveforms["drive"]["I"]),len(self._waveforms["drive"]["I"]))),self._waveforms["drive"]["I"])
+    #self._drive.setData(1,list(linspace(0,len(self._waveforms["drive"]["Q"]),len(self._waveforms["drive"]["Q"]))),self._waveforms["drive"]["Q"])
     
   def updateFluxlinePlot(self):
-    xvalues = list(linspace(0,len(self._waveforms["fluxline"])*0.5,len(self._waveforms["fluxline"]))+self.instrument.parameters()["waveformDelay"]-self.instrument.parameters()["fluxlineWaveformDelay"])
-    xvalues.append(xvalues[-1]*2-xvalues[-2])
-    xvalues.append(20000.0)
-    waveform = list(self._waveforms["fluxline"])
-    waveform.append(waveform[0])
-    waveform.append(waveform[0])
-    self._flux.setData(0,xvalues,waveform)
+    pass
+    #xvalues = list(linspace(0,len(self._waveforms["fluxline"])*0.5,len(self._waveforms["fluxline"]))+self.instrument.parameters()["waveformDelay"]-self.instrument.parameters()["fluxlineWaveformDelay"])
+    #xvalues.append(xvalues[-1]*2-xvalues[-2])
+    #xvalues.append(20000.0)
+    #waveform = list(self._waveforms["fluxline"])
+    #waveform.append(waveform[0])
+    #waveform.append(waveform[0])
+    #self._flux.setData(0,xvalues,waveform)
     
     
   def updateReadoutPlot(self):
-    xvalues = list(linspace(0,len(self._waveforms["readout"])*0.5,len(self._waveforms["readout"]))+self._readoutDelay+self.instrument.parameters()["waveformDelay"])
-    xvalues.insert(0,0)
-    xvalues.append(xvalues[-1]*2-xvalues[-2])
-    xvalues.append(20000.0)
-    waveform = list(self._waveforms["readout"])
-    waveform.insert(0,0)
-    waveform.append(waveform[0])
-    waveform.append(waveform[0])
-    self._readout.setData(0,xvalues,waveform)
+    pass
+    #xvalues = list(linspace(0,len(self._waveforms["readout"])*0.5,len(self._waveforms["readout"]))+self._readoutDelay+self.instrument.parameters()["waveformDelay"])
+    #xvalues.insert(0,0)
+    #xvalues.append(xvalues[-1]*2-xvalues[-2])
+    #xvalues.append(20000.0)
+    #waveform = list(self._waveforms["readout"])
+    #waveform.insert(0,0)
+    #waveform.append(waveform[0])
+    #waveform.append(waveform[0])
+    #self._readout.setData(0,xvalues,waveform)
     
 
   def updatedGui(self,subject,property,value = None,modifier = None):
@@ -103,22 +104,18 @@ class PulseVisualizer(QWidget,ObserverWidget):
     self.connect(self.timer,SIGNAL("timeout()"),self.onTimer)
     self.timer.start()
 
-    self._drive = XYPlot("Drive")
-    self._flux = XYPlot("Flux")
-    self._readout = XYPlot("Readout")
-
 #    layout.addWidget(QLabel("Drive"))
-    layout.addWidget(self._drive)
+#    layout.addWidget(self._drive)
 #    layout.addWidget(QLabel("Flux"))
-    layout.addWidget(self._flux)
+#    layout.addWidget(self._flux)
 #    layout.addWidget(QLabel("Readout"))
-    layout.addWidget(self._readout)
+#    layout.addWidget(self._readout)
 
     self.setLayout(layout)
-    
-    self.connect(self._drive,SIGNAL("limitsChanged(QRectF)"),self.limitsChanged)
-    self.connect(self._flux,SIGNAL("limitsChanged(QRectF)"),self.limitsChanged)
-    self.connect(self._readout,SIGNAL("limitsChanged(QRectF)"),self.limitsChanged)
+   
+#    self.connect(self._drive,SIGNAL("limitsChanged(QRectF)"),self.limitsChanged)
+#    self.connect(self._flux,SIGNAL("limitsChanged(QRectF)"),self.limitsChanged)
+#    self.connect(self._readout,SIGNAL("limitsChanged(QRectF)"),self.limitsChanged)
 
 class Panel(FrontPanel):
   

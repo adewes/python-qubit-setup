@@ -36,7 +36,7 @@ class Instr(VisaInstrument):
   
   #Power should be supplied in dBm
   def setPower(self,power):
-    self.write("L1%gDM" % power)
+    self.write("L1%fDM" % power)
     return self.power()
   
   def output(self):
@@ -45,7 +45,7 @@ class Instr(VisaInstrument):
             
   #freq is supposed to be supplied in GHz!
   def setFrequency(self,freq):
-    self.write("F1%gGH" % (freq))
+    self.write("F1%fGH" % (freq))
     return self.frequency()
   
   def parameters(self):

@@ -1,3 +1,4 @@
+
 import sys
 import getopt
 import re
@@ -7,12 +8,17 @@ import math
 from numpy import *
 
 from pyview.lib.classes import *
+from pyview.lib.datacube import Datacube
+from pyview.helpers.datamanager import DataManager
 from pyview.helpers.instrumentsmanager import Manager
 
 #This is a virtual instrument representing a Josephson Bifurcation Amplifier.
 class Instr(Instrument):
 
   def parameters(self):
+    """
+    Returns the parameters of the JBA.
+    """
     return self._params
     
   def initReadout(self):
@@ -20,7 +26,7 @@ class Instr(Instrument):
     self._afg.setTriggerDelay(0)
     
   def internalDelay(self):
-    return self._params["internalDelay"]+self._params["starkPulseLength"]+self._params["starkPulseDelay"]
+    return self._params["internalDelay"]+self._params["starkPulseLength"]+self._params["starkPulseDelay"]*0
     
   def saveState(self,name):
     state = dict()
@@ -95,7 +101,63 @@ class Instr(Instrument):
     self.notify("status","Maximum variance at %g GHz" % maxFrequency)
     self._muwave.setFrequency(maxFrequency)
     
-  #Calibrates the Qubit readout to a given switching probability with a given accuracy.
+  def measureSCurve(self,voltages = None,ntimes = 40,microwaveOff = True):
+    self.notify("status","Measuring S curve...")
+    def getVoltageBounds(v0,jba,variable,ntimes):
+      v = v0
+      jba.setVoltage(v)
+      jba._acqiris.bifurcationMap(ntimes = ntimes)
+      p = jba._acqiris.Psw()[variable]
+      
+      while p > 0.03 and v < v0*2.0:
+        v*=1.05
+        jba.setVoltage(v)
+        jba._acqiris.bifurcationMap(ntimes = ntimes)
+        p = jba._acqiris.Psw()[variable]
+      vmax = v
+      
+      v = v0
+      jba.setVoltage(v)
+      jba._acqiris.bifurcationMap(ntimes = ntimes)
+      p = jba._acqiris.Psw()[variable]
+      
+      while p < 0.98 and v > v0/2.0:
+        v/=1.05
+        jba.setVoltage(v)
+        jba._acqiris.bifurcationMap(ntimes = ntimes)
+        p = jba._acqiris.Psw()[variable]
+      vmin = v
+      return (vmin*0.95,vmax*1.2)
+
+    try:
+      v0 = self.voltage()
+      state = self._qubitmwg.output()
+      self._attenuator.turnOn()
+      data = Datacube("S Curve")
+      dataManager = DataManager()
+      dataManager.addDatacube(data)
+      if microwaveOff:
+        self._qubitmwg.turnOff()
+      if voltages == None:
+        self.notify("status","Searching for proper voltage range...")
+        (vmin,vmax) = getVoltageBounds(v0,self,self._params["variable"],ntimes)
+        voltages = arange(vmin,vmax,0.005)
+        self.notify("status","Measuring S curve in voltage range  [%g - %g]..." % (vmin,vmax))
+      for v in voltages:
+        self.setVoltage(v)
+        self._acqiris.bifurcationMap(ntimes = ntimes)
+        data.set(v = v)
+        data.set(**(self._acqiris.Psw()))
+        data.commit()
+        self.notify("sCurve",(data.column("v"),data.column(self._params["variable"])))
+    finally:
+      self.notify("status","S curve complete.")
+      self.setVoltage(v0)
+      if state:
+        self._qubitmwg.turnOn()
+    
+    
+  #Calibrates the Qubit readout and adjust the switching probability with a given accuracy.
   def calibrate(self,level = 0.2,accuracy = 0.025,microwaveOff = True):
     try:
       state = self._qubitmwg.output()
@@ -103,16 +165,15 @@ class Instr(Instrument):
       if microwaveOff:
         self._qubitmwg.turnOff()
       self._muwave.turnOn()
-
-      self.notify("status","Starting calibration.")
-      voltages = arange(0.0,2.0,0.1)
+      self.notify("status","Starting calibration...")
+      voltages = arange(0.3,1.8,0.05)
       (ps,max,maxVoltage) = self._attenuatorRangeCheck(voltages)
       voltages2 = arange(maxVoltage-0.1,maxVoltage+0.1,0.005)
       (p2s,max,maxVoltage2) = self._attenuatorRangeCheck(voltages2)
       self.notify("status","Voltage calibration complete...")
-      self._attenuator.setVoltage(maxVoltage2*self._polarity)
+      self._attenuator.setVoltage(maxVoltage2)
       self.notify("status","Adjusting offset and rotation...")
-      self._adjustRotationAndOffset()
+      self.adjustRotationAndOffset()
       self.adjustSwitchingLevel(level,accuracy)
       self.notify("status","Calibration complete. Measure of separation: %g" % self.separationMeasure(acquire = False))
       return (voltages,ps,voltages2,p2s,self.trends)
@@ -126,19 +187,23 @@ class Instr(Instrument):
     maxVoltage = 0
     self.variances = zeros((len(voltages),2))
     self.variances[:,0] = voltages
+    data = Datacube("Variance")
     for i in range(0,len(voltages)):
       if self.stopped():
         self._stopped = False
         raise Exception("Got stopped!")
-      v = voltages[i] * self._polarity 
+      v = voltages[i] 
       self._attenuator.setVoltage(v)
-      self._acqiris.bifurcationMap()
+      self._acqiris.bifurcationMap(ntimes = 10)
       trends = self._acqiris.trends()
       varsum =cov(trends[self._acqirisChannel])+cov(trends[self._acqirisChannel+1])
+      data.set(v = v)
+      data.set(varsum=varsum)
+      data.commit()
+      self.notify("variance",(data.column("v"),data.column("varsum")))
       self.notify("status","Variance at %g V: %g" % (v,varsum))
       print "Variance: %f" % varsum
       self.variances[i,1] = varsum
-      self.notify("variance",self.variances)
       ps.append(varsum)
       if varsum > max:
         max = varsum
@@ -218,6 +283,8 @@ class Instr(Instrument):
       p = self.switchingProbability()
       v = vOld
       sensitivity = (p-p2)/0.02
+      if verbose:
+            print "sensitivity is %g/V" % sensitivity
       while fabs(p-level)>accuracy:
         if self.stopped():
           raise Exception("Got stopped!")
@@ -243,7 +310,7 @@ class Instr(Instrument):
           sensitivity = 0
         else:
           sensitiviy = (pOld-p)/(v-vOld)
-        self._attenuator.setVoltage(voltage*self._polarity)
+        self._attenuator.setVoltage(voltage)
         v = self._attenuator.voltage()
         p = self.switchingProbability()
       self.notify("status","Switching probability: %g %%" % (p*100))
@@ -251,83 +318,195 @@ class Instr(Instrument):
     finally:
       if status == True:
         self._qubitmwg.turnOn()
-    
-  def _adjustRotationAndOffset(self):
-    #We set all offsets and angles to 0.
-    self._acqiris.ConfigureChannel(self._acqirisChannel+1,offset = 0)
-    self._acqiris.ConfigureChannel(self._acqirisChannel+2,offset = 0)
-    self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,0)
 
-    cnt = 0
-    
-    offsets = [0,0]
-
-    while cnt < 10:
-
-      print cnt
-
-      cnt+=1
-
-      self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 40)
-    
-      trends = self._acqiris.trends()
-      means = mean(trends[self._acqirisChannel:self._acqirisChannel+2,:],axis = 1)
-    
-      offsets[0]-=means[0]
-      offsets[1]-=means[1]
-    
-      self._acqiris.ConfigureChannel(self._acqirisChannel+1,offset = offsets[0])
-      self._acqiris.ConfigureChannel(self._acqirisChannel+2,offset = offsets[1])
+  def adjustSwitchingLevel2(self,level = 0.2,accuracy = 0.05,verbose = False,minSensitivity = 15.0,microwaveOff = True,nmax = 100,checkBivaluated=True):
+    try:
+      status = self._qubitmwg.output()
+      if microwaveOff:
+        self._qubitmwg.turnOff()
+      vOld = self._attenuator.voltage()
+      #First check that the distribution is bivaluated with a sufficient gap between the 2 values (with separationMeasure().
+      if (checkBivaluated and (self.separationMeasure() < 0.5)):
+        v = 0.0
+        print "Separation (%g) is not good, re-adjusting..." % self.separationMeasure(acquire = False)
+        self._attenuator.setVoltage(v)
+        while self.separationMeasure(acquire = True) < 3.0:
+          if verbose:
+            print "Separation at %g V is %g" % (v,self.separationMeasure(acquire = False))
+          v+=0.1
+          self._attenuator.setVoltage(v)
+          if v >= 2.0:
+            self._attenuator.setVoltage(vOld)
+            raise Exception("Cant't find a good working point!")
+      #Measure the std of Ps
+      std=0
+      #Start the search
+      vmin=0
+      vmax=2
+      vOld = self._attenuator.voltage()
+      pOld = self.switchingProbability()
+      dv=0.02
+      cnt = 0
+      while fabs(pOld-level)>accuracy:
+        if self.stopped():
+          raise Exception("Got stopped!")
+        # increase the increment until dp is larger than twice both the variance and the target accuracy
+        dp=0
+        dv2=0
+        while abs(dp)<2*max(std,accuracy):
+          dv2+=dv
+          v=vOld+dv2
+          self._attenuator.setVoltage(v)
+          p = self.switchingProbability()
+          dp=p-pOld
+        dv=dv2
+        vOld=v
+        self.notify("status","Switching probability at %g V: %g" % (v,p))
+        # update the vmin-vmax range
+        if p>level+3*max(std,accuracy):
+          vmin=vOld
+        if p<level-3*max(std,accuracy):
+          vmax=vOld
+        #Vary v according to dp/dv but staying in the vmin-vmax range
+        if fabs(pOld-level)>accuracy :
+          v=vOld+(p-level)*dv/dp
+          v=min(v,vmax)
+          v=max(v,vmin)
+          if verbose:
+            print "vmin= %g, vmax=%g, v = %g, p = %g, dv = %f, dp %f, next v=%f" % (vmin,vmax,vOld,p,dv,dp,v)
+          if v==vOld:
+            raise Exception("Twice the same attenuation voltage v although target was not reached!")   
+          vOld=v
+          pOld=p
+          cnt+=1
+          if cnt>nmax:
+            raise Exception("Maximum number of steps exceeded!")
+        self._attenuator.setVoltage(vOld)
+        vOLd = self._attenuator.voltage()
+        pOld = self.switchingProbability()
+      self.notify("status","Switching probability: %g %%" % (pOld*100))
+      return (p,cnt)
+    finally:
+      if status == True:
+        self._qubitmwg.turnOn()
       
-      if abs(means[0]) < 0.0001 and abs(means[1]) < 0.0001:
-        break
-        
-      print means
-
-    covar = cov(trends[self._acqirisChannel]-means[0],trends[self._acqirisChannel+1]-means[1])
-  
-    #We calculate the eigenvectors of the variance/covariance matrix.
-  
-    la,v = linalg.eig(covar)
     
-    #We calculate the rotation angle from the eigenvector matrix.
-    #M = [(cos(theta),-sin(theta)),(sin(theta),cos(theta))
-    
-    if la[1] > la[0]:
-      angle = math.atan2(v[0,0],v[0,1])
-    else:
-      angle = math.atan2(v[1,0],v[0,0])
-    
-    self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,angle)
-
-    pBefore = self._acqiris.probabilities()[self._acqirisChannel/2,0]
-    oldVoltage = self._attenuator.voltage()
-
-    self._attenuator.setVoltage(oldVoltage+0.1*self._polarity)
-    self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 80)
-
-    pAfter = self._acqiris.probabilities()[self._acqirisChannel/2,0]
-
-    if pAfter > pBefore:
-      angle+=math.pi
+  def adjustRotationAndOffset(self):
+    try:
+      state = self._qubitmwg.output() # memorize microw generator state
+      self._qubitmwg.turnOff()        # and switch microw off
+      self._attenuator.turnOn()       # switch attenuator control voltage to on
+      #We set all offsets and angles to 0.
+      self._acqiris.ConfigureChannel(self._acqirisChannel+1,offset = 0)
+      self._acqiris.ConfigureChannel(self._acqirisChannel+2,offset = 0)
+      self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,0)
+      cnt = 0  
+      offsets = [0,0]                 # reinit offsets
+      while cnt < 3:                  # repeat for higher precision
+        print cnt
+        cnt+=1
+        self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 40)    
+        trends = self._acqiris.trends()
+        means = mean(trends[self._acqirisChannel:self._acqirisChannel+2,:],axis = 1)    
+        covar = var(trends[self._acqirisChannel:self._acqirisChannel+2,:])    
+        offsets[0]-=means[0]
+        offsets[1]-=means[1]    
+        self.notify("iqdata",trends)
+        self._acqiris.ConfigureChannel(self._acqirisChannel+1,offset = offsets[0])
+        self._acqiris.ConfigureChannel(self._acqirisChannel+2,offset = offsets[1])   
+        print covar   
+        print means
+      covar = cov(trends[self._acqirisChannel]-means[0],trends[self._acqirisChannel+1]-means[1]) 
+      #We calculate the eigenvectors of the variance/covariance matrix.  
+      la,v = linalg.eig(covar)    
+      #We calculate the rotation angle from the eigenvector matrix.
+      #M = [(cos(theta),-sin(theta)),(sin(theta),cos(theta))
+      if la[1] > la[0]:
+        angle = math.atan2(v[0,0],v[0,1])
+      else:
+        angle = math.atan2(v[1,0],v[0,0])    
       self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,angle)
-    
-    self._attenuator.setVoltage(oldVoltage)
-    self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 80)
-    trends = self._acqiris.trends()
-    self.trends = zeros((2,len(trends[0,:])))
-
-    self.trends[0,:] = trends[self._acqirisChannel,:]*cos(angle) + trends[self._acqirisChannel+1,:]*sin(angle)
-    self.trends[1,:] = -trends[self._acqirisChannel,:]*sin(angle) + trends[self._acqirisChannel+1,:]*cos(angle)
-    
-    print cov(self.trends[0],self.trends[1])
-
-    self.notify("iqdata",self.trends)
+      pBefore = self._acqiris.probabilities()[self._acqirisChannel/2,0]
+      oldVoltage = self._attenuator.voltage()
+      self._attenuator.setVoltage(oldVoltage+0.1)
+      self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 80)
+      pAfter = self._acqiris.probabilities()[self._acqirisChannel/2,0]
+      if pAfter > pBefore:
+        angle+=math.pi
+        self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,angle)    
+      self._attenuator.setVoltage(oldVoltage)
+      self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 80)
+      trends = self._acqiris.trends()
+      self.trends = zeros((2,len(trends[0,:])))
   
+      self.trends[0,:] = trends[self._acqirisChannel,:]*cos(angle) + trends[self._acqirisChannel+1,:]*sin(angle)
+      self.trends[1,:] = -trends[self._acqirisChannel,:]*sin(angle) + trends[self._acqirisChannel+1,:]*cos(angle)
+      
+      print cov(self.trends[0],self.trends[1])
+  
+      self.notify("iqdata",self.trends)
+    finally:
+      if state == True:
+        self._qubitmwg.turnOn()
+  
+  def adjustRotationAndOffset2(self):
+    try:
+      state = self._qubitmwg.output() # memorize microw generator state
+      self._qubitmwg.turnOff()        # and switch microw off
+      self._attenuator.turnOn()       # switch attenuator control voltage to on
+      cnt = 0  
+      offsets=self_.acqiris.parameters()["offsets"][0:2]
+      while cnt < 3:                  # repeat for higher precision
+        print cnt
+        cnt+=1
+        self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 40)    
+        trends = self._acqiris.trends()
+        means = mean(trends[self._acqirisChannel:self._acqirisChannel+2,:],axis = 1)    
+        offsets[0]-=means[0]
+        offsets[1]-=means[1]    
+        self.notify("iqdata",trends)
+        self._acqiris.ConfigureChannel(self._acqirisChannel+1,offset = offsets[0])
+        self._acqiris.ConfigureChannel(self._acqirisChannel+2,offset = offsets[1])   
+        print means
+      angle=self_.acqiris.parameters()["rotation"][self._acqirisChannel]
+      #We calculate the covariance matrix. 
+      covar = cov(trends[self._acqirisChannel]-means[0],trends[self._acqirisChannel+1]-means[1]) 
+      la,v = linalg.eig(covar)        #We calculate the eigenvalues and eigenvectors of the covariance matrix.    
+      #We calculate the rotation angle from the eigenvector matrix M = [(cos(theta),-sin(theta)),(sin(theta),cos(theta))], using the eigenvector of maximum weight (max eigenvalues)
+      if la[1] > la[0]:
+        angle+= math.atan2(v[0,0],v[0,1])
+      else:
+        angle+= math.atan2(v[1,0],v[0,0])
+      pi=math.pi
+      angle=math.fmod(angle+pi,2*pi)-pi    
+      #We set the rotation angle
+      self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,angle)
+      pBefore = self._acqiris.probabilities()[self._acqirisChannel/2,0]
+      oldVoltage = self._attenuator.voltage()
+      self._attenuator.setVoltage(oldVoltage+0.1)
+      self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 80)
+      pAfter = self._acqiris.probabilities()[self._acqirisChannel/2,0]
+      if pAfter > pBefore:
+        angle=math.fmod(angle+2*pi,2*pi)-pi
+        self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,angle)    
+      self._attenuator.setVoltage(oldVoltage)
+      self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 80)
+      trends = self._acqiris.trends()
+      self.trends = zeros((2,len(trends[0,:])))
+  
+      self.trends[0,:] = trends[self._acqirisChannel,:]*cos(angle) + trends[self._acqirisChannel+1,:]*sin(angle)
+      self.trends[1,:] = -trends[self._acqirisChannel,:]*sin(angle) + trends[self._acqirisChannel+1,:]*cos(angle)
+      
+      print cov(self.trends[0],self.trends[1])
+  
+      self.notify("iqdata",self.trends)
+    finally:
+      if state == True:
+        self._qubitmwg.turnOn()
+        
   def initialize(self, params = dict(),acqirisChannel = 0,variable = "p1x",muwave = "cavity1mwg",attenuator  = "AttS2",acqiris = "acqiris",qubitmwg = "qubit1mwg",polarity = 1,afg = "afg3",waveform = "USER1",internalDelay = 243,returnDelay = 57,acquisitionTime = 250,sampleInterval = 1e-9,trigSlope = 0,safetyMargin = 100):
     manager = Manager()
     self._muwave = manager.getInstrument(muwave)
-    self._polarity = polarity
     self._register = manager.getInstrument("register")
     self._acqiris = manager.getInstrument(acqiris)
     self._afg = manager.getInstrument(afg)

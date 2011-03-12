@@ -43,14 +43,14 @@ class Instr(VisaInstrument):
     Sets the microwave frequency.
     "freq" is given in GHz.
     """
-    self.write("FREQ:FIXED %g" % (freq*1e9))
+    self.write("FREQ:FIXED %f" % (freq*1e9))
     return self.frequency()
     
   def setPower(self,power):
     """
     Sets the output power in dBm
     """
-    self.write("POW %g" % power)
+    self.write("POW %f" % power)
     return self.power()
   
   def parameters(self):

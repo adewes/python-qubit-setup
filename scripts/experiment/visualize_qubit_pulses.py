@@ -25,8 +25,8 @@ legend(("Q2 I","Q2 Q"))
 #Fluxline
 
 subplot(413,sharex = ax1)
-plot(array(qubit1.fluxlineWaveform())*afg1.amplitude()/2.0+afg1.offset())
-plot(array(qubit2.fluxlineWaveform())*afg2.amplitude()/2.0+afg2.offset())
+plot(array(qubit1.fluxlineWaveform())*awg2.amplitude(1)/2.0+awg2.offset(1))
+plot(array(qubit2.fluxlineWaveform())*awg2.amplitude(2)/2.0+awg2.offset(2))
 axvline(qubit1.readoutDelay(),ls = "-.")
 axvline(qubit2.readoutDelay(),ls = "-.")
 
@@ -46,6 +46,8 @@ plot(linspace(qubit1.readoutDelay(),qubit1.readoutDelay()+len(jba1.readoutWavefo
 plot(linspace(qubit2.readoutDelay(),qubit2.readoutDelay()+len(jba2.readoutWaveform())/2.0,len(jba2.readoutWaveform())),array(jba2.readoutWaveform()))
 axvline(qubit1.readoutDelay()+delay)
 axvline(qubit1.readoutDelay()+delay+numberOfPoints*sampleInterval)
+
+
 
 xlabel("time [ns]")
 

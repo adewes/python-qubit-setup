@@ -4,399 +4,361 @@ from numpy.linalg import *
 import scipy.optimize
 import random
 
-g = matrix([1,0])
-e = matrix([0,1])
-
 #We define the measurement operators...
 
-state_x = 1.0/sqrt(2.0)*matrix([1,1]).transpose()
-state_y = 1.0/sqrt(2.0)*matrix([1,1j]).transpose()
-state_z = matrix([0,1]).transpose()
-
-proj_x = sigmax.copy()
-proj_y = sigmay.copy()
-proj_z = sigmaz.copy()
-
-
-def generateMeasurementCombinationsNames(qubit,measurement,measurements,nqubits):
-	"""
-	Generates all possible combinations in a set of measurements for "nqubits" qubits.
-	"""
-	ms = []
-	if qubit >= nqubits:
-		return measurement
-	for m in measurements:
-		if measurement == None:
-			ms.append(generateMeasurementCombinationsNames(qubit+1,m,measurements,nqubits))
-		else:
-			ms.append(generateMeasurementCombinationsNames(qubit+1,measurement+m,measurements,nqubits))
-	return ms
-
-##Generate and simulate the characterization of a qubit state
-
-#A three qubit state:
-#state = tensor(tensor(e,e),e)+tensor(tensor(g,g),g)*1j
-
-#A two qubit state
-
-state = tensor(e,g)*sqrt(0.8)+tensor(g,g)*sqrt(0.1)+tensor(e,e)*sqrt(0.1)
-
-state = state/norm(state)
-
-qubits = int(log(float(state.shape[1]))/log(2.0))
-
-#We generate rho
-rho0 = adjoint(state)*state
-print rho0
-
-#The measurements that we want to perform on each qubit...
-measurements = [proj_x,proj_y,proj_z]
-
-cs = generateMeasurementCombinations(0,None,measurements,qubits)
-
-print len(cs)
-
-measuredValues = []
-expectedValues = []
-
-samples = 200.0
-
-for measurement in cs:
-	sum = 0
-	for i in range(0,samples):
-		(value,rho) = measure(rho0,measurement[1])
-		sum+=value
-	sum/=float(samples)
-	measuredValues.append(sum)
-	expectedValues.append(trace(rho0*measurement[0]))
-	
-print measuredValues
-print expectedValues
-##Load some experimental data
-
-#1 qubit measurement
-
-#Maps the measured probabilities to spin expectation values:
-
-if tomographyData.column("mxmxpx1") != None and False:
-	indices = ["x","y","z","mx","my","i"]
-else:
-	indices = ["x","y","z","i"]
-#detector1 = matrix([[qubit1.parameters()["readout.p00"],1-qubit1.parameters()["readout.p11"]],[1-qubit1.parameters()["readout.p00"],qubit1.parameters()["readout.p11"]]])
-#detector2 = matrix([[qubit2.parameters()["readout.p00"],1-qubit2.parameters()["readout.p11"]],[1-qubit2.parameters()["readout.p00"],qubit2.parameters()["readout.p11"]]])
-
-detector1 = matrix([[tomographyData.parameters()["qubit1"]["readout.p00"],1.0-tomographyData.parameters()["qubit1"]["readout.p11"]],[1.0-tomographyData.parameters()["qubit1"]["readout.p00"],tomographyData.parameters()["qubit1"]["readout.p11"]]])
-detector2 = matrix([[tomographyData.parameters()["qubit2"]["readout.p00"],1.0-tomographyData.parameters()["qubit2"]["readout.p11"]],[1.0-tomographyData.parameters()["qubit2"]["readout.p00"],tomographyData.parameters()["qubit2"]["readout.p11"]]])
-
-detectorFunction = tensor(detector1,detector2)
-
-#detectorFunction = matrix(eye(4))
-
-import numpy.linalg
-import numpy
-
-inverseDetectorFunction = numpy.linalg.inv(detectorFunction)
-
-measuredTimes = []
-
-measuredSpins = Datacube("Measured spins")
-#dataManager.addDatacube(measuredSpins)
-
-probabilityMeasurements = []
-
-for t in range(0,len(tomographyData)):
-
-	row = t
-
-	print "t = %g " % t
-
-
-	measuredValues = []
-
-	times = tomographyData.column("duration")
-	
-	measuredSpins.set(t = times[t])
-
-	for i in indices:
-		for j in indices:
-			print i+j
-			if i == "i" and j == "i":
-				measuredSpins.set(**{i+j:1})
-			elif i == "i":
-				probs = matrix([tomographyData.column("z"+j+"p00")[row],tomographyData.column("z"+j+"p10")[row],tomographyData.column("z"+j+"p01")[row],tomographyData.column("z"+j+"p11")[row]])	
-				mapping = matrix([1,1,-1,-1])
-			elif j == "i":			
-				probs = matrix([tomographyData.column(i+"z"+"p00")[row],tomographyData.column(i+"z"+"p10")[row],tomographyData.column(i+"z"+"p01")[row],tomographyData.column(i+"z"+"p11")[row]])
-				mapping = matrix([1,-1,1,-1])
-			else:
-				mapping = matrix([1,-1,-1,1])
-				probs = matrix([tomographyData.column(i+j+"p00")[row],tomographyData.column(i+j+"p10")[row],tomographyData.column(i+j+"p01")[row],tomographyData.column(i+j+"p11")[row]])
-			realProbs = inverseDetectorFunction*transpose(probs)
-			if i != "i" and j != "i":
-				probabilityMeasurements.extend(transpose(realProbs)[0].tolist()[0])
-			expectation = (mapping*realProbs)[0,0]
-			#print i+j," real probabilities: ",realProbs,probs,expectation
-			measuredValues.append(expectation)
-			if i != "i" or j != "i":
-				measuredSpins.set(**{i+j:expectation})
-	
-	measuredSpins.commit()
-
-	measuredTimes.append(measuredValues)
-
-##We define the error and fit functions
-
-def error_function(x,measurements,measured):
-	rho = buildRho(x)
+def densityMatrixErrorFunction(x,measurements,measured,diagonalElements = None):
+	if diagonalElements == None:
+		rho = buildRho(x)
+	else:
+		rho = buildRho(diagonalElements+list(x))
 	errorsum = 0		
 	v = zeros(len(measurements))
 	for i in range(0,len(measurements)):
 		measurement = measurements[i]
 		expected = real(trace(rho*measurement))
 		p = (expected+1.0)/2.0
-#		p10 = qubit1.parameters()["readout.p11"]*qubit2.parameters()["readout.p11"]
-#		p11 = qubit1.parameters()["readout.p11"]*qubit2.parameters()["readout.p11"]
-#		var = p*p*pow((p10-p11),2)+p11*p11+2.0*p11*p*(p10-p11)-p11-p*(p10-p11)
-#		var = -var
-#		D = transpose(detectorFunction)*detectorFunction
-#		var = 1e-1+trace(rho*measurement*measurement)-pow(trace(rho*measurement),2.0)
-		var = 0.1+max(0,p*(1.0-p))
+		var = 1.0
+		var = abs(pow(trace(rho*measurement),2.0)-trace(rho*measurement*measurement))+0.01
 		v[i]=pow(expected-measured[i],2.0)/var
 	return v
 
-def fitDensityMatrix(measurements,measuredValues,initialGuess ):
-	if initialGuess == None:
-		dim = pow(2,qubits)
-		nparams = int((dim*dim*0.5+0.5*dim)*2)
-		params = [1.0]*nparams
-		initialGuess = params
-#	result = scipy.optimize.fmin(lambda *args:numpy.linalg.norm(error_function(*args)),initialGuess,args=(measurements,measuredValues),xtol = 1e-9,ftol = 1e-9)
-#	return result
-	result = scipy.optimize.leastsq(error_function,initialGuess,args=(measurements,measuredValues),xtol = 1e-9,ftol = 1e-9)
+def optimizeDensityMatrix(measurements,measuredValues,initialGuess,diagonalElements = None):
+	result = scipy.optimize.leastsq(densityMatrixErrorFunction,initialGuess,args=(measurements,measuredValues,diagonalElements),xtol = 1e-9,ftol = 1e-9,maxfev=10000)
 	return result[0]
-##Fit the whole time series...
 
-timeData = Datacube("Tomography time data",dtype = complex128)
-#dataManager.addDatacube(timeData)
+def convertToSpins(tomographyData,inverseDetectorFunction,indices1=["x","y","z","i"],indices2=["x","y","z","i"]):
 
-densityMatrices = []
+	measuredSpins = Datacube("Measured spins")
+	measuredProbabilities = Datacube("Measured probabilities")
 
-matrices = [sigmax,sigmay,sigmaz]
 
-paramsGuess = None
+	for t in range(0,len(tomographyData)):
+	
+		row = t
+	
+		print "row = %g " % t
+	
+		for name in tomographyData.names():
+			if name[2]!="p":
+				measuredSpins.set(**{name:tomographyData.column(name)[t]})
+				measuredProbabilities.set(**{name:tomographyData.column(name)[t]})
+	
+	
+		for i in indices1:
+			for j in indices2:
+				if i == "i" and j == "i":
+					measuredSpins.set(**{i+j:1})
+				elif i == "i":
+					if not "z"+j+"p00" in tomographyData.names():
+						continue
+					probs = matrix([tomographyData.column("z"+j+"p00")[row],tomographyData.column("z"+j+"p10")[row],tomographyData.column("z"+j+"p01")[row],tomographyData.column("z"+j+"p11")[row]])	
+					mapping = matrix([1,1,-1,-1])
+				elif j == "i":			
+					if not i+"z"+"p00" in tomographyData.names():
+						continue
+					probs = matrix([tomographyData.column(i+"z"+"p00")[row],tomographyData.column(i+"z"+"p10")[row],tomographyData.column(i+"z"+"p01")[row],tomographyData.column(i+"z"+"p11")[row]])
+					mapping = matrix([1,-1,1,-1])
+				else:
+					if not i+j+"p00" in tomographyData.names():
+						continue
+					mapping = matrix([1,-1,-1,1])
+					probs = matrix([tomographyData.column(i+j+"p00")[row],tomographyData.column(i+j+"p10")[row],tomographyData.column(i+j+"p01")[row],tomographyData.column(i+j+"p11")[row]])
+				realProbs = inverseDetectorFunction*transpose(probs)
+				if i != "i" and j != "i":
+					probs = transpose(realProbs)[0].tolist()[0]
+					values = ["00","10","01","11"]
+					for k in range(0,len(values)):
+						measuredProbabilities.set(**{i+j+values[k]:probs[k]})
+				expectation = (mapping*realProbs)[0,0]
+				if i != "i" or j != "i":
+					measuredSpins.set(**{i+j:expectation})
+		measuredSpins.commit()
+		measuredProbabilities.commit()
 
-projectors = map(lambda x:createMeasurement(x),matrices)
+	return (measuredSpins,measuredProbabilities)
 
-outcomes = [1,-1]
-labels = ["0","1"]
 
-measurements = []
-measurementLabels = []
+def sqrtm(A):
+	(eigenvals,eigenvecs) = eigh(A)
+	return (eigenvecs)*diag(sqrt(eigenvals))*adjoint(eigenvecs)
+	
+def quantumFidelity(measuredRho,targetRho):
+	return trace(sqrtm(measuredRho)*targetRho*sqrtm(measuredRho))
 
-for projector_i in projectors:
-	for projector_j in projectors:
-		for outcome_i in outcomes:
-			for outcome_j in outcomes:
-				measurements.append(tensor(projector_i[outcome_i],projector_j[outcome_j]))
 
-#Or use the classical basis
-if tomographyData.column("mxmxpx1") != None and False:
-	matrices = [sigmax,sigmay,sigmaz,-sigmax,-sigmay,idatom]
-else:
-	matrices = [sigmax,sigmay,sigmaz,idatom]
-measurements = generateCombinations(matrices,lambda x,y:tensor(x,y),2)
+def simulateMeasurements(state,samples = 200):
+	"""
+	Simulates a set of measurement on a given quantum state
+	"""
+	
+	qubits = int(log(float(state.shape[1]))/log(2.0))
+	rho0 = adjoint(state)*state
+	measurements = [sigmax,sigmay,sigmaz,-sigmax,-sigmay,-sigmaz,idatom]
+	labels = ["x","y","z","mx","my","mz","i"]
+	
+	measuredSpins = Datacube()
+	measuredProbabilities = Datacube()
+	
+	cs = map(lambda x:[x,createMeasurement(x)],generateCombinations(measurements,lambda x,y:tensor(x,y),2))
+	measuredLabels = generateCombinations(labels,lambda x,y:x+y,2)
+	
+	for j in range(0,len(cs)):
+		sum = 0
+		measurement = cs[j]
+		for i in range(0,samples):
+			(value,rho) = measure(rho0,measurement[1])
+			sum+=value+random.gauss(0,0.1)*0
+		sum/=float(samples)
+		measuredSpins.set(**{measuredLabels[j]:sum})
+	measuredSpins.commit()
+	return measuredSpins
 
-densityMatrix = None
+def convertDatacubeToSpins(data,saveValues = False,deleteOldData = False,indices1=["x","y","z","i"],indices2=["x","y","z","i"]):
 
-import numpy.random
+	detector1 = matrix([[data.parameters()["qubit1"]["readout.p00"],1.0-data.parameters()["qubit1"]["readout.p11"]],[1.0-data.parameters()["qubit1"]["readout.p00"],data.parameters()["qubit1"]["readout.p11"]]])
+	detector2 = matrix([[data.parameters()["qubit2"]["readout.p00"],1.0-data.parameters()["qubit2"]["readout.p11"]],[1.0-data.parameters()["qubit2"]["readout.p00"],data.parameters()["qubit2"]["readout.p11"]]])
+	
+	detectorFunction = tensor(detector1,detector2)
+	inverseDetectorFunction = numpy.linalg.inv(detectorFunction)
+	
+	(measuredSpins,measuredProbabilities) = convertToSpins(data,inverseDetectorFunction,indices1=indices1,indices2=indices2)
+	if "cnt" in data.names():
+		measuredSpins.createColumn("cnt",data.column("cnt"))
 
-for t in [0]:
-	print "t = %g " % t
-	measuredValues = measuredTimes[t]
-	timeData.set(t = t)
+	if deleteOldData:
+		data.removeChildren(data.allChildren())
 
+	data.addChild(measuredSpins)
+	data.addChild(measuredProbabilities)
+	if saveValues:
+		data.savetxt()
+
+	return (measuredSpins,measuredProbabilities)
+
+
+def fitDensityMatrix(measuredSpins,measuredProbabilities,hot = False,row = None,rounds = 10):
+
+	if measuredSpins.column("mxmx") != None and False:
+		matrices = [sigmax,sigmay,sigmaz,-sigmax,-sigmay,-sigmaz,idatom]
+		labels = ["x","y","z","mx","my","mz","i"]
+	else:
+		matrices = [sigmax,sigmay,sigmaz,idatom]
+		labels = ["x","y","z","i"]
+	
+	measurements = generateCombinations(matrices,lambda x,y:tensor(x,y),2)
+	measuredLabels = generateCombinations(labels,lambda x,y:x+y,2)
+	
+	if row == None:
+		measuredValues = map(lambda x: mean(measuredSpins.column(x)),measuredLabels)
+	else:
+		measuredValues = map(lambda x: measuredSpins.column(x)[row],measuredLabels)
+	
+	densityMatrix = matrix(zeros((4,4)))
+	
 	bestValue = None
 
-	reconstructedRho = reconstructDensityMatrix(measurements,measuredValues)
-
-	densityMatrix = reconstructedRho
-
-	for i in range(0,300):
-
-		print "Round %d" % i
-
-		if densityMatrix == None or True:
-			paramsGuess = parametrizeRho(
-				matrix
-					(
-						[
-						[abs(probabilityMeasurements[-4])+random.gauss(0,0.1),0,0,0],
-						[0,abs(probabilityMeasurements[-2])+random.gauss(0,0.1),0,0],
-						[0,0,abs(probabilityMeasurements[-3])+random.gauss(0,0.1),0],
-						[0,0,0,abs(probabilityMeasurements[-1])+random.gauss(0,0.1)],
-						]
-					)
-				)
+	for j in range(0,rounds):
+		print "Round %d" % j
+	
+		rhoGuess = (numpy.random.rand(4,4)+1j*numpy.random.rand(4,4)-numpy.random.rand(4,4)-1j*numpy.random.rand(4,4))*0.5
+		if row != None:
+			rhoGuess[0,0] = measuredProbabilities.column("zz00")[row]
+			rhoGuess[1,1] = measuredProbabilities.column("zz10")[row]
+			rhoGuess[2,2] = measuredProbabilities.column("zz01")[row]
+			rhoGuess[3,3] = measuredProbabilities.column("zz11")[row]
 		else:
-			paramsGuess = parametrizeRho(densityMatrix)
-			paramsGuess = map(lambda k:k+random.gauss(0,0.1),paramsGuess)
+			rhoGuess[0,0] = mean(measuredProbabilities.column("zz00"))
+			rhoGuess[1,1] = mean(measuredProbabilities.column("zz10"))
+			rhoGuess[2,2] = mean(measuredProbabilities.column("zz01"))
+			rhoGuess[3,3] = mean(measuredProbabilities.column("zz11"))
+		paramsGuess = parametrizeRho(rhoGuess)
+	
+		diagonalElements = list(paramsGuess[:3])
 		
-		#rhoGuess = reconstructedRho+numpy.random.normal(0,0.3,(4,4))+1j*numpy.random.normal(0,0.3,(4,4))
-
-		paramsGuess = parametrizeRho(numpy.random.rand(4,4)+1j*numpy.random.rand(4,4)-(numpy.random.rand(4,4)+1j*numpy.random.rand(4,4)))
-#		paramsGuess = parametrizeRho(zeros((4,4))+0.25+numpy.random.normal(0,0.1,(4,4)))
-		paramsGuess = parametrizeRho(densityMatrix)
-		paramsGuess = paramsGuess+numpy.random.normal(0,0.1,len(paramsGuess))
-		
-		print numpy.linalg.norm(error_function(paramsGuess,measurements,measuredValues))
-		
-		fittedParams = fitDensityMatrix(measurements,measuredValues,paramsGuess)
-		matrixParameters = vectorizeRho(buildRho(fittedParams))
-		
-		value = numpy.linalg.norm(error_function(fittedParams,measurements,measuredValues))
-
+		fittedParams = optimizeDensityMatrix(measurements,measuredValues,paramsGuess[3:],diagonalElements)
+		matrixParameters = vectorizeRho(buildRho(diagonalElements+list(fittedParams)))
+	
+		value = numpy.linalg.norm(densityMatrixErrorFunction(fittedParams,measurements,measuredValues,diagonalElements))
 
 		if bestValue == None or value < bestValue:
 			print "New best value: %g " % value
 			bestValue = value
-			densityMatrix = buildRho(fittedParams)
+			densityMatrix = buildRho(diagonalElements+list(fittedParams))
 			try:
-				plotDensityMatrix(densityMatrix,"rho")
+				measuredSpins.parameters()["densityMatrix"] = densityMatrix.tolist()
+				measuredSpins.savetxt(forceSave = True)
+				if hot:
+					plotDensityMatrix(densityMatrix,"rho")
 			except:
-				pass
+				print sys.exc_info()
+	return densityMatrix	
 
-	densityMatrices.append(densityMatrix)
+##Renormalize a set of measured data.
 
-print densityMatrix
+(measuredSpins,measuredProbabilities) = convertDatacubeToSpins(tomographyData,indices1=["x","y","z","i"], indices2=["x","y","z","i"],saveValues = False,deleteOldData = True)
+measuredProbabilities.parameters()["defaultPlot"] = [("duration","zzp00"),("duration","zzp01"),("duration","zzp10"),("duration","zzp11")]
+######
+#densityMatrices = Datacube("Density matrices")
+#densityMatrices.createColumn("phi",measuredSpins.column("phi"))
+#densityMatrices.goTo(0)
+#measuredSpins.goTo(0)
+#measuredSpins.addChild(densityMatrices)
+
+densityMatrix = fitDensityMatrix(measuredSpins,measuredProbabilities,hot = True,row =None,rounds = 20)
+##
+for i in range(0,4):
+	for j in range(0,4):
+		densityMatrices.set(**{str(i)+str(j):densityMatrix[i,j]})
+densityMatrices.commit()
+
+##Plot a given density matrix that has been fitted before.
+
+densityMatrix = matrix(zeros((4,4)),dtype =complex128)
+
+for i in range(0,4):
+	for j in range(0,4):
+		densityMatrix[i,j] = densityMatrices.column(str(i)+str(j))[0]
+
+plotDensityMatrix(densityMatrix)
+
+##Plot a Pauli set
+
+from pyview.ide.mpl.backend_agg import *
+ion()
+figure("pauli set")
+cla()
+rcParams["font.size"] = 18
+plotPauliSet(measuredSpins = measuredSpins)
+plotPauliSet(densityMatrix = rho,fill = False,lw = 2,ls = "dashed")
+ylim(-1.2,1.2)
+
+##Calculate the quantum fidelity of a given state
+
+state = tensor(gs+1j*es,gs+1j*es)
+state = state/norm(state)
+rho = adjoint(state)*state
+plotDensityMatrix(rho,figureName = "ideal")
+print quantumFidelity(rho,densityMatrix)
+
+##Calculate the entanglement witnesses using the measured values of XX, XY, etc...
+
+(measuredSpins,measuredProbabilities) = convertDatacubeToSpins(tomographyData,indices1=["x","y","z","i"], indices2=["x","y","z","i"],saveValues = False,deleteOldData = True)
+measuredProbabilities.parameters()["defaultPlot"] = [("duration","zzp00"),("duration","zzp01"),("duration","zzp10"),("duration","zzp11")]
+
+for i in range(0,len(measuredSpins)):
+	
+	w_psi_plus = 1./4.*(1-measuredSpins.column("xx")[i]+measuredSpins.column("yy")[i]-measuredSpins.column("zz")[i])
+	w_psi_minus = 1./4.*(1+measuredSpins.column("xx")[i]-measuredSpins.column("yy")[i]-measuredSpins.column("zz")[i])
+	w_phi_plus = 1./4.*(1-measuredSpins.column("xx")[i]-measuredSpins.column("yy")[i]+measuredSpins.column("zz")[i])
+	w_phi_minus = 1./4.*(1+measuredSpins.column("xx")[i]+measuredSpins.column("yy")[i]+measuredSpins.column("zz")[i])
+
+	measuredSpins.setAt(i,w_psi_minus = w_psi_minus,w_psi_plus = w_psi_plus,w_phi_minus = w_phi_minus,w_phi_plus = w_phi_plus)
+	measuredSpins.setAt(i,maxv = 0.5,minv = -0.5)
+
+measuredSpins.parameters()["defaultPlot"] = [["phi","w_phi_plus"],["phi","w_phi_minus"],["phi","w_psi_plus"],["phi","w_psi_minus"],["phi","maxv"],["phi","minv"]]
+
+measuredSpins.sortBy("phi")
+
+##Calculate the entanglement witnesses using the reconstructed density matrices
+
+w_psi_plus = 1./4.*(tensor(idatom,idatom)-tensor(sigmax,sigmax)+tensor(sigmay,sigmay)-tensor(sigmaz,sigmaz))
+w_psi_minus = 1./4.*(tensor(idatom,idatom)+tensor(sigmax,sigmax)-tensor(sigmay,sigmay)-tensor(sigmaz,sigmaz))
+w_phi_plus = 1./4.*(tensor(idatom,idatom)-tensor(sigmax,sigmax)-tensor(sigmay,sigmay)+tensor(sigmaz,sigmaz))
+w_phi_minus = 1./4.*(tensor(idatom,idatom)+tensor(sigmax,sigmax)+tensor(sigmay,sigmay)+tensor(sigmaz,sigmaz))
+
+
+p_relax = 0.12
+
+
+wData = Datacube("Simulation of entanglement witnesses - %g %% relaxation" % p_relax)
+
+dataManager.addDatacube(wData)
+
+for psi in arange(0,360,1):
+	state = tensor(es,gs)-tensor(gs,es)*exp(1j*psi/180.0*math.pi)
+	state = state/norm(state)
+	rho = adjoint(state)*state*(1.0-p_relax)+p_relax*adjoint(tensor(gs,gs))*tensor(gs,gs)
+	wData.set(psi = psi)
+	wData.set(w_phi_minus = trace(w_phi_minus*rho),w_phi_plus = trace(w_phi_plus*rho),w_psi_plus = trace(w_psi_plus*rho),w_psi_minus = trace(w_psi_minus*rho))
+	wData.commit()
+	
 
 ##
 
-print "State simulation:" + "qubit setup\scripts\state tomography\state simulation.py"
+witnesses = Datacube("Entanglement Witnesses")
+tomographyData.addChild(witnesses)
+#witnesses.createColumn("height",tomographyData.column("height"))
+witnesses.goTo(0)
 
-matrices = [sigmax,sigmay,sigmaz]
+densityMatrices = Datacube("Density Matrices",dtype = complex128)
+#densityMatrices.createColumn("duration",tomographyData.column("duration"))
+densityMatrices.goTo(0)
 
-projectors = map(lambda x:createMeasurement(x),matrices)
+tomographyData.addChild(densityMatrices)
 
-outcomes = [1,-1]
-labels = ["0","1"]
+for row in range(0,len(measuredSpins)):
+	densityMatrix = fitDensityMatrix(measuredSpins,measuredProbabilities,hot = False,row = row)
+	for i in range(0,4):
+		for j in range(0,4):
+			densityMatrices.set(**{str(i)+str(j):densityMatrix[i,j]})
+	densityMatrices.set(row = row)
+	densityMatrices.commit()
+	witnesses.set(angle = angle(densityMatrix[3,0]))
+	witnesses.set(psi_plus = trace(densityMatrix*w_psi_plus))
+	witnesses.set(psi_minus = trace(densityMatrix*w_psi_minus))
+	witnesses.set(phi_plus = trace(densityMatrix*w_phi_plus))
+	witnesses.set(phi_minus = trace(densityMatrix*w_phi_minus))
+	witnesses.set(row = row)
+	witnesses.commit()
+		
+##
 
-measurements = []
-measurementLabels = []
+densityMatrices = Datacube("Density Matrices",dtype = complex128)
+densityMatrices.createColumn("index",measuredSpins.column("index"))
+densityMatrices.goTo(0)
+measuredSpins.addChild(densityMatrices)
+for row in range(0,len(measuredSpins)):
+	densityMatrix = fitDensityMatrix(measuredSpins,measuredProbabilities,hot = True,row = row)
+	for i in range(0,4):
+		for j in range(0,4):
+			densityMatrices.set(**{str(i)+str(j):densityMatrix[i,j]})
+	densityMatrices.commit()
+measuredSpins.savetxt()
+##
 
-for projector_i in projectors:
-	for projector_j in projectors:
-		for outcome_i in outcomes:
-			for outcome_j in outcomes:
-				measurements.append(tensor(projector_i[outcome_i],projector_j[outcome_j]))
-
-matrices = [sigmax,sigmay,sigmaz,idatom]
-
-measurements = generateCombinations(matrices,lambda x,y:tensor(x,y),2)
-
-from numpy.linalg import norm
-import random
-
-state = tensor(es+1j*gs,es+1j*gs)
-
+##Example of Density Matrix Plotting
+kappa = -3.14*2
+state = tensor(gs,es)+tensor(es,gs)*exp(1j*math.pi*1.1)
+groundState = tensor(gs,gs)
 state = state/norm(state)
-
-originalDensityMatrix = adjoint(state)*state
-
-densityMatrix = originalDensityMatrix
-
-measuredValues = []
-
-for m in measurements:
-	v = trace(originalDensityMatrix*m)
-	var = 0.05+(v+1.0)/2.0*0.3*0
-	measuredValues.append(v+random.gauss(0,var))
-
-reconstructedRho = reconstructDensityMatrix(measurements,measuredValues)
-
-print reconstructedRho
-
-bestParams = None
-minError = None
-
-for i in range(0,20):
-
-	print i
-
-	paramsGuess = parametrizeRho(originalDensityMatrix)
-	
-	fittedParams = fitDensityMatrix(measurements,measuredValues,paramsGuess)
-	matrixParameters = vectorizeRho(buildRho(fittedParams))
-	
-	error = numpy.linalg.norm(error_function(fittedParams,measurements,measuredValues))
-
-	if bestParams == None or error < minError:
-		bestParams = fittedParams
-		minError = error
-		print error
-		densityMatrix = buildRho(bestParams)
-
-print "After ML fitting:"
-print densityMatrix
-
-##3D plotting of density matrix
-#densityMatrix = densityMatrices[0]
-
-fig = figure("3D density matrix")
+rho = adjoint(state)*state*0.9+adjoint(groundState)*groundState*0.1
+gate = tensor(rotx(-180.0/180.0*math.pi),idatom)
+rho = gate*rho*adjoint(gate)
+print quantumFidelity(rho,densityMatrix)
+plotDensityMatrix(rho)
+##Simulate the effect of a quantum gate on a given state
+state = tensor(es,gs)
+state = state/norm(state)
+rho = adjoint(state)*state
+psi = math.pi*2.2/3.0
+gate = sqrtm(matrix([[1,0,0,0],[0,0,1,0],[0,1,0,0],[0,0,0,1]]))*tensor(rotz(-0.0/180.0*math.pi),rotz(135.0/180.0*math.pi))
+finalState = gate*rho*adjoint(gate)
+ion()
+rcParams["font.size"] = 14
+figure("rho3",figsize=(8,8))
 clf()
 cla()
-from mpl_toolkits.mplot3d import Axes3D
-
-import numpy as np
-
-ax = Axes3D(fig)
-
-dim = densityMatrix.shape[0]
-
-xpos = []
-ypos = []
-zpos = [0]*dim*dim
-
-dx = [0.5]*dim*dim
-dy = [0.5]*dim*dim
-dz = []
-
-
-for x in range(0,dim):
-	for y in range(0,dim):
-		xpos.append(x)
-		ypos.append(y)
-		dz.append(abs(densityMatrix[x,y]))
-
-
-#ax.set_xticklabels(["00","10","01","11"])
-ax.bar3d(xpos, ypos, zpos, dx,dy,dz, color='b')
-#ax.set_xticks([0,1,2,3])
-#ax.set_xlabel("test")
-
-draw()
-
-##Plot and print the results
-
-#densityMatrix = (densityMatrices[0]+densityMatrices[1]+densityMatrices[2])/3
-#densityMatrix = densityMatrices[0]
-
-rcParams["font.size"] = 10
-
-labels = []
-texts = ['0','1']
-
-
-labels = generateCombinations(texts,lambda x,y:x+y,4)
-
-figure("results new",figsize = (8,2))
-subplot(111)
-cla()
-title("Real component")
-l = range(0,len(vectorizeRho(densityMatrix)))
-l2 = map(lambda x: x+0.5,l)
-#bar(l,real(vectorize(rho0)),color = 'r',width = 0.5)
-bar(l,real(vectorizeRho(densityMatrix)),color = 'g',align = 'edge',width = 0.5,label = 'real')
-bar(l2,imag(vectorizeRho(densityMatrix)),color = 'r',align = 'edge',width = 0.5,label = 'imaginary')
-legend()
-#ylim(-1,1)
-xticks(l2,labels)
+#subplot(121)
+#plotDensityMatrix(densityMatrix,figureName = None)
+#savefig("test.png")
+#subplot(122)
+plotPauliSet(measuredSpins)
+#plotDensityMatrix(matrix(tomographyData.childrenAt(0)[12].allChildren()[0].parameters()["densityMatrix"]),figureName = None)
+##Simulate a set of measurements on a given state
+state = tensor(gs,es)-1j*tensor(es,gs)
+state = state/norm(state)
+simulateMeasurements(state)
+##
+for child in tomographyData.allChildren():
+	(measuredSpins,measuredProbabilities) = convertDatacubeToSpins(child,saveValues = True,deleteOldData = True)
+	densityMatrix = fitDensityMatrix(measuredSpins,measuredProbabilities,hot = True)

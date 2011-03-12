@@ -18,7 +18,7 @@ from pyview.config.parameters import params
 
 print "Initializing instruments..."
 
-serverHost = "192.168.0.11:8000"
+serverHost = "127.0.0.1:8000"
 
 instrumentManager = Manager()
 
@@ -48,13 +48,14 @@ qubit1_att = instrumentManager.initInstrument('rip://%s/AttS2' % serverHost,"yok
 qubit2_att = instrumentManager.initInstrument('rip://%s/AttS3' % serverHost,"yokogawa",kwargs = {'name' : 'Attenuator Qubit 2','visaAddress' : 'GPIB0::19'},forceReload = True)
 
 #The transmon coil
-transmon_coil = instrumentManager.initInstrument('rip://%s/Coil' % serverHost,"yokogawa",kwargs = {'name' : 'Transmon Coil','visaAddress' : 'GPIB0::2','slewRate':5.0},forceReload = True)
+#transmon_coil = instrumentManager.initInstrument('rip://%s/Coil' % serverHost,"yokogawa",kwargs = {'name' : 'Transmon Coil','visaAddress' : 'GPIB0::2','slewRate':5.0},forceReload = True)
 
 #The Acqiris card
 acqiris = instrumentManager.initInstrument('rip://192.168.0.22:8000/acqiris',"acqiris",kwargs = {'name': 'Acqiris Card'},forceReload = True)
 
 #The Arbitrary Waveform generator
-awg = instrumentManager.initInstrument('rip://%s/awg' % serverHost,"awg",forceReload = True)
+awg2 = instrumentManager.initInstrument('rip://%s/awg2' % serverHost,"awg",forceReload = True,kwargs = {'visaAddress' : "TCPIP0::192.168.0.14::inst0"})
+awg = instrumentManager.initInstrument('rip://%s/awg' % serverHost,"awg",forceReload = True,kwargs = {'visaAddress' : "TCPIP0::192.168.0.3::inst0"})
 
 ##The Rhode & Schwarz FSP
 fsp = instrumentManager.initInstrument("rip://%s/fsp" % serverHost,"fsp",forceReload = True)
@@ -63,8 +64,8 @@ fsp = instrumentManager.initInstrument("rip://%s/fsp" % serverHost,"fsp",forceRe
 sda = instrumentManager.initInstrument("rip://%s/sda" % serverHost,"lecroy_sda_7",forceReload = True)
 
 #The AFG signal generators
-afg1 = instrumentManager.initInstrument('rip://%s/afg1' % serverHost,"afg",kwargs = {"name": "AFG 1, Channel 1"},forceReload = True)
-afg2 = instrumentManager.initInstrument('rip://%s/afg2' % serverHost,"afg",kwargs = {"name": "AFG 1, Channel 2","source":2},forceReload = True)
+#afg1 = instrumentManager.initInstrument('rip://%s/afg1' % serverHost,"afg",kwargs = {"name": "AFG 1, Channel 1"},forceReload = True)
+#afg2 = instrumentManager.initInstrument('rip://%s/afg2' % serverHost,"afg",kwargs = {"name": "AFG 1, Channel 2","source":2},forceReload = True)
 
 afg3 = instrumentManager.initInstrument('rip://%s/afg3' % serverHost,"afg",kwargs = {"visaAddress": "TCPIP0::192.168.0.5::inst0","name": "AFG 2, Channel 1"},forceReload = True)
 afg4 = instrumentManager.initInstrument('rip://%s/afg4' % serverHost,"afg",kwargs = {"visaAddress": "TCPIP0::192.168.0.5::inst0","name": "AFG 2,Channel 2","source":2},forceReload = True)
@@ -106,5 +107,5 @@ except:
   print "Cannot load qubit calibration data!"
   print sys.exc_info()
 
-qubit1 = instrumentManager.initInstrument('qubit1',"qubit",kwargs = {'fluxlineResponse':fluxline1Response,'fluxlineWaveform':'USER1','fluxline':'afg1','iqOffsetCalibration':qubit1IQOffset,'iqSidebandCalibration':qubit1IQSideband,'iqPowerCalibration':qubit1IQPower,'jba':'jba1',"awgChannels":[1,2],"variable":1,"waveforms":["qubit1iReal","qubit1qReal"],"awg":"awg","mwg":"qubit1mwg"},forceReload = True)
-qubit2 = instrumentManager.initInstrument('qubit2',"qubit",kwargs = {'fluxlineResponse':fluxline2Response,'fluxlineWaveform':'USER2','fluxline':'afg2','iqOffsetCalibration':qubit2IQOffset,'iqSidebandCalibration':qubit2IQSideband,'iqPowerCalibration':qubit2IQPower,'jba':'jba2',"awgChannels":[3,4],"variable":2,"waveforms":["qubit2iReal","qubit2qReal"],"awg":"awg","mwg":"qubit2mwg","acqirisVariable":"px1"},forceReload = True)
+qubit1 = instrumentManager.initInstrument('qubit1',"qubit",kwargs = {'fluxlineTriggerDelay':459,'fluxlineResponse':fluxline1Response,'fluxline':'awg2','fluxlineWaveform':'fluxlineQubit1','fluxlineChannel':1,'iqOffsetCalibration':qubit1IQOffset,'iqSidebandCalibration':qubit1IQSideband,'iqPowerCalibration':qubit1IQPower,'jba':'jba1',"awgChannels":[1,2],"variable":1,"waveforms":["qubit1iReal","qubit1qReal"],"awg":"awg","mwg":"qubit1mwg"},forceReload = True)
+qubit2 = instrumentManager.initInstrument('qubit2',"qubit",kwargs = {'fluxlineTriggerDelay':459,'fluxlineResponse':fluxline2Response,'fluxline':'awg2','fluxlineWaveform':'fluxlineQubit2','fluxlineChannel':2,'iqOffsetCalibration':qubit2IQOffset,'iqSidebandCalibration':qubit2IQSideband,'iqPowerCalibration':qubit2IQPower,'jba':'jba2',"awgChannels":[3,4],"variable":2,"waveforms":["qubit2iReal","qubit2qReal"],"awg":"awg","mwg":"qubit2mwg","acqirisVariable":"px1","additionalFluxlineDelay":-5},forceReload = True)

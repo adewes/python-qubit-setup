@@ -5,7 +5,8 @@ sys.path.append('../')
 
 from numpy import cos,sin
 from pyview.lib.classes import *
-from pyview.lib.canvas import *
+from pyview.ide.frontpanel import FrontPanel
+from pyview.ide.mpl.canvas import *
 from instruments.acqiris import CAL_TOUT
 
 import datetime

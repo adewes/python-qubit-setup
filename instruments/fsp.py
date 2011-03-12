@@ -40,7 +40,7 @@ class Instr(VisaInstrument):
     return self.getTrace()    
     
   def setReferenceLevel(self,level):
-    self.write("DISP:TRACE1:Y:RLEVEL %g" % level)
+    self.write("DISP:TRACE1:Y:RLEVEL %f" % level)
 		
   def referenceLevel(self):
     return float(self.ask("DISP:TRACE1:Y:RLEVEL?"))

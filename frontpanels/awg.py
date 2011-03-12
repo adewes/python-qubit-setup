@@ -5,23 +5,79 @@ sys.path.append('.')
 sys.path.append('../')
 
 from pyview.lib.classes import *
-from pyview.lib.canvas import *
-from pyview.ide.codeeditor import *
+from pyview.ide.frontpanel import FrontPanel
+from pyview.ide.mpl.canvas import *
+from pyview.ide.patterns import *
+from pyview.ide.editor.codeeditor import *
 import string
+import numpy
 
 import re
 import struct
 
 from datetime import *
 
-class WaveformEditor(QWidget,ReloadableWidget):
+class ChannelWidget(QWidget,ObserverWidget):
+
+  def updateValues(self):
+    for property in self._properties:  
+      getattr(self,property).setText(str(getattr(self._awg,property)(self._channel)))
+    
+  def setValues(self):
+    for property in self._properties:
+      getattr(self._awg,"set"+property[0].capitalize()+property[1:])(self._channel,float(getattr(self,property).text()))
+    self.updateValues()
+  
+  def __init__(self,awg,channel,parent = None):
+    QWidget.__init__(self,parent)
+    ObserverWidget.__init__(self)
+    self._awg = awg
+    self._channel = channel
+    self._awg.attach(self)
+    
+    layout = QGridLayout()
+    
+    self._properties = ["amplitude","offset","marker1High","marker1Low","marker2High","marker2Low"]
+    
+    for property in self._properties:
+      setattr(self,property,QLineEdit())
+        
+    self.updateButton = QPushButton("Update")
+    self.setButton = QPushButton("Set")
+    
+    self.connect(self.updateButton,SIGNAL("clicked()"),self.updateValues)
+    self.connect(self.setButton,SIGNAL("clicked()"),self.setValues)
+    
+    self.amplitude = QLineEdit()
+    self.offset = QLineEdit()
+    
+    cnt = 0
+    
+    for property in self._properties:
+      layout.addWidget(QLabel(property),cnt,0)
+      layout.addWidget(getattr(self,property),cnt,1)
+      cnt+=1
+    
+    layout.addWidget(self.updateButton,cnt,0)
+    layout.addWidget(self.setButton,cnt,1)
+
+    self.setLayout(layout)
+    self.updateValues()
+    
+  def updatedGui(self,subject,property,value = None):
+    if subject == self._awg:
+      pass
+      
+  def updated(self,subject,property,value):
+    pass
+
+class WaveformEditor(QWidget):
 
   def __init__(self,parent = None,panel = None):
     QWidget.__init__(self,parent)
-    ReloadableWidget.__init__(self)
     self.waveformname = QLineEdit("test")
     self.waveformcode = CodeEditor()
-    self.waveformcode.setText("""waveform = []
+    self.waveformcode.setPlainText("""waveform = []
 markers = []
 import math
 for i in range(0,20000):
@@ -43,18 +99,18 @@ for i in range(0,20000):
     
   def saveWaveform(self):
     code = str(self.waveformcode.toPlainText())
-    print code
     gv = dict()
     exec(code,gv,gv)
     if 'waveform' in gv and 'markers' in gv:
       waveform = gv['waveform'] 
       markers = gv['markers'] 
-      wavedata = self.panel.instrument.writeRealData(waveform,markers)
+      wavedata = self.panel.instrument.writeRealData(numpy.array(waveform),numpy.array(markers))
       self.panel.instrument.createWaveform(str(self.waveformname.text()),wavedata,'REAL')
       fig = self.panel.waveformGraph
       fig.axes.clear()
       fig.axes.plot(range(0,len(waveform)),waveform)
       fig.draw()
+      self.panel.instrument.dispatch("updateWaveforms")
 
 #This is the AWG frontpanel.
 class Panel(FrontPanel):
@@ -62,7 +118,7 @@ class Panel(FrontPanel):
     #Update handler. Gets invoked whenever the instrument gets a new trace.
     def updatedGui(self,subject,property = None,value = None):
         if subject == self.instrument:
-                if property == "waveforms":
+                if property == "updateWaveforms":
                     print "Updating waveforms..."
                     self.updateWaveformList()
 
@@ -96,14 +152,24 @@ class Panel(FrontPanel):
 
         super(Panel,self).__init__(instrument,parent)
 
-        self.setFixedWidth(640)
-        self.setMinimumHeight(500)
-        
         self.waveformGraph = MyMplCanvas(self, width=5, height=4, dpi=100)
+        self.channels = QWidget()
+        channelsLayout = QBoxLayout(QBoxLayout.LeftToRight)
+        
+        channelsLayout.addWidget(ChannelWidget(instrument,1,self))
+        channelsLayout.addWidget(ChannelWidget(instrument,2,self))
+        channelsLayout.addWidget(ChannelWidget(instrument,3,self))
+        channelsLayout.addWidget(ChannelWidget(instrument,4,self))
+        
+        cw = ChannelWidget(instrument,1,self)
+        
+        self.channels.setLayout(channelsLayout)
+        
         self.GpibCommand = QLineEdit()
         self.tabs = QTabWidget()
         self.waveformlist = QTreeWidget()
         self.waveformlist.setHeaderLabels(["Name","Length","Type"])
+        self.tabs.addTab(self.channels,"Channels")
         self.tabs.addTab(self.waveformlist,"Waveforms")
         self.waveformEditor = WaveformEditor(self,panel = self)
         self.tabs.addTab(self.waveformEditor,"Editor")
@@ -125,5 +191,5 @@ class Panel(FrontPanel):
         self.connect(self.waveformlist,SIGNAL("itemSelectionChanged()"),self.updateGraph)
 
         self.setLayout(self.grid)
-        self.instrument.dispatch("getWaveforms")
-        self.updateWaveformList()
+        self.instrument.dispatch("updateWaveforms")
+#        self.updateWaveformList()

@@ -53,9 +53,9 @@ class Instr(Instrument):
         self._params["synchro"] = 1
         self._params["usedChannels"] = 15
         self._params["averaging"] = 0
-        self._params["delayTime"] = 400e-9
-        self._params["sampleInterval"] = 1e-9
-        self._params["numberOfPoints"] = 250
+        self._params["delayTime"] = 700e-9
+        self._params["sampleInterval"] = 3e-9
+        self._params["numberOfPoints"] = 400
         self._params["numberOfSegments"] = 100
         self._params["freqEch"] = 499999999.9999999
         
@@ -82,7 +82,7 @@ class Instr(Instrument):
         error_code = c_int32(args[0])
         error_str = create_string_buffer("\000"*1024)
         status = self.__acqiris.transformErr2Str(self.__vi_session,error_code,error_str)        
-        self.errorStr(error_str.value)      
+        return str(error_str)
       
       def saveState(self,name):
         return self._params
@@ -153,9 +153,7 @@ class Instr(Instrument):
         #We configure the individual channels:
         for i in range(0,4):
           self.ConfigureChannel(1+i,self._params["fullScales"][i],self._params["offsets"][i],self._params["couplings"][i],self._params["bandwidths"][i])
-        
-        self.statusStr("Configuration done.")
-          
+                  
         
         self._params["numberOfPoints"] = number_of_points.value
         self._params["numberOfSegments"] = number_of_segments.value
@@ -215,14 +213,11 @@ class Instr(Instrument):
         Calibrates the Acqiris card.
         """
       
-        self.statusStr("Calibrating...")      
         options = c_int32(args[0])
         channels = c_int32(args[0])
         status=self.__acqiris.CalibrateV1(self.__vi_session,options,channels)        
         if status != 0:
-          self.transformErr2Str(status)
-        else:
-          self.statusStr("Calibration successful.")      
+          raise Exception(self.transformErr2Str(status))
         
       def probabilities(self):
         return self._probabilities
@@ -315,9 +310,7 @@ class Instr(Instrument):
         status=self.__acqiris.AcquireV1(self.__vi_session,c_pre_acquisition,byref(self.__time_us))  
         return status      
         if status != 0:
-          self.transformErr2Str(status)
-        else:
-          self.statusStr("Acquisition time (us):"+str(self.__time_us.value))
+          raise Exception(self.transformErr2Str(status))
         return status
         
       def DMATransferV1(self,average = 0,tension = 1,delay = 0,*args):        
@@ -345,12 +338,11 @@ class Instr(Instrument):
         return status       
         import numpy
         if status != 0:
-          self.transformErr2Str(status)          
+          raise Exception(self.transformErr2Str(status))
         else:
           print number_segments_returned
           self.notify("data",(list(self.waveform_1),list(self.waveform_2),list(self.waveform_3),list(self.waveform_4)))
-          self.statusStr("Transfer time (us):"+str(time_us.value))
-        
+          
         
       def FinishApplicationV1(self,*args):
         self.__acqiris.FinishApplicationV1(self.__vi_session)

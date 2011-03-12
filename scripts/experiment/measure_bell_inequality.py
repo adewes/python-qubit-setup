@@ -35,16 +35,21 @@ try:
 	i = 26
 	qb1FluxSeq = PulseSequence()
 	qb1FluxSeq.addPulse(qb1BaseFlux)
+  	
+#	for alpha in arange(0,360.0,10.0):
+#    len_wait=14
+  for len_wait in arange(0,100,1)
+    alpha=45
+		print alpha
 		
 	zPulse = qubit1.generateZPulse(length = i)*(flux-qb1BaseFlux[1])
-	zLen = len(zPulse)+14.0
+	zLen = len(zPulse)+len_wait
 	qb1FluxSeq.addPulse(zPulse,delay = readout-zLen-tomographyLength)
 	
 	if i != 0:
 		qubit1.loadFluxlineWaveform(qb1FluxSeq.getWaveform(),factor = f)
-	
-	for alpha in arange(0,360.0,10.0):
-		print alpha
+
+
 		data.set(alpha = alpha)
 		
 		qb2Seq = PulseSequence()

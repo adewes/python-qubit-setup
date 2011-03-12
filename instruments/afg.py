@@ -40,7 +40,7 @@ class Instr(VisaInstrument):
     
   #Set the repetition frequency in MHz
   def setFixedFrequency(self,freq):
-    self.write("SOURCE%d:FREQUENCY:FIXED %g MHz" % (self._source,freq))
+    self.write("SOURCE%d:FREQUENCY:FIXED %f MHz" % (self._source,freq))
     
   def writeVectorWaveform(self,name,points,length,baseLevel = 0):
     waveform = numpy.zeros((length))
@@ -115,11 +115,11 @@ class Instr(VisaInstrument):
     return self.pulseWidth()
 
   def setOffset(self,o):
-    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:OFFSET %g" % (self._source,o))
+    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:OFFSET %f" % (self._source,o))
     return self.offset()
     
   def setAmplitude(self,a):
-    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:AMPLITUDE %g" % (self._source,a))
+    self.write("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:AMPLITUDE %f" % (self._source,a))
     return self.amplitude()
     
   def setLow(self,o):
@@ -172,7 +172,7 @@ class Instr(VisaInstrument):
   def setFrequency(self,f):
     if f > 60e6:
       raise Exception("AFG Repetition frequency is too high!")
-    self.write("SOURCE%d:FREQUENCY:FIXED %g Hz" % (self._source,f))
+    self.write("SOURCE%d:FREQUENCY:FIXED %f Hz" % (self._source,f))
 
   def frequency(self):
     f = float(self.ask("SOURCE%d:FREQUENCY:FIXED?" % self._source))

@@ -52,14 +52,14 @@ class Instr(VisaInstrument):
       self.write("*CLS;TRS;")
       
     def setAttenuation(self,a):
-      self.write("SA1 %g DB" % a)
+      self.write("SA1 %f DB" % a)
       return self.attenuation()
       
     def attenuation(self):
       return float(self.ask("SA1?"))
       
     def setPower(self,power):
-      self.write("PWR %g,DB" % power)
+      self.write("PWR %f,DB" % power)
       return self.power()
       
     def power(self):
