@@ -31,12 +31,12 @@ class Instr(Instrument):
   def saveState(self,name):
     state = dict()
     state["params"] = copy.deepcopy(self._params)
-    state["readoutWaveform"] = copy.deepcopy(self._readoutWaveform)
+    state["readoutWaveform"] = (copy.deepcopy(self._readoutWaveform)).tolist()
     return state
     
   def restoreState(self,state):
     self._params = copy.deepcopy(state["params"])
-    self._readoutWaveform = copy.deepcopy(state["readoutWaveform"])
+    self._readoutWaveform = array(copy.deepcopy(state["readoutWaveform"]))
 #    self.loadReadoutWaveform(self._params["measureTime"],self._params["riseTime"],self._params["fallTime"],self._params["latchTime"],self._params["latchHeight"])
     
   def readoutDuration(self):
@@ -52,8 +52,8 @@ class Instr(Instrument):
     waveform[measureTime*2+1+riseTime*2:measureTime*2+1+riseTime*2+fallTime*2] = linspace((1<<14) - 1,((1<<14)-1)*latchHeight,fallTime*2)*scale
     waveform[measureTime*2+1+riseTime*2+fallTime*2:-fallTime*2] = int((float(1<<14)-1)*latchHeight)*scale
     waveform[-fallTime*2:] = linspace(int((float(1<<14)-1)*latchHeight),0,fallTime*2)*scale
-    self._afg.writeWaveform(self._waveform,fullWaveform)
-    self._afg.setWaveform(self._waveform)
+    self._afg.writeWaveform(self._params["waveform"],fullWaveform)
+    self._afg.setWaveform(self._params["waveform"])
     self._afg.setPeriod(waveformLength/2.0)
     self._params["waitTime"] = waitTime
     self._params["riseTime"] = riseTime
@@ -72,7 +72,7 @@ class Instr(Instrument):
     self._acqiris.ConfigureV2(**{"delayTime":(self._params["readoutWindowStart"])*1e-9})
     
   def updateReadoutWaveform(self):
-    self._readoutWaveform = self._afg.readWaveform(self._waveform)
+    self._readoutWaveform = self._afg.readWaveform(self._params["waveform"])
     self.notify("readoutWaveform",self._readoutWaveform)
     return self.readoutWaveform()
         
@@ -86,7 +86,7 @@ class Instr(Instrument):
     pulse[delay:delay+holdTime] = 255
     pulse[delay+holdTime:delay+holdTime+sampleTime] = int(255*holdHeight)
     data = self._awg.writeIntData(pulse,markers)
-    self._awg.createWaveform(self._waveform,data,'INT')
+    self._awg.createWaveform(self._params["waveform"],data,'INT')
 
   def calibrateFrequency(self,minFreq,maxFreq):
     maxVariance = 0
@@ -158,7 +158,7 @@ class Instr(Instrument):
     
     
   #Calibrates the Qubit readout and adjust the switching probability with a given accuracy.
-  def calibrate(self,level = 0.2,accuracy = 0.025,microwaveOff = True):
+  def calibrate(self,level = 0.1,accuracy = 0.025,microwaveOff = True):
     try:
       state = self._qubitmwg.output()
       self._attenuator.turnOn()
@@ -196,7 +196,7 @@ class Instr(Instrument):
       self._attenuator.setVoltage(v)
       self._acqiris.bifurcationMap(ntimes = 10)
       trends = self._acqiris.trends()
-      varsum =cov(trends[self._acqirisChannel])+cov(trends[self._acqirisChannel+1])
+      varsum =cov(trends[self._params["acqirisChannel"]])+cov(trends[self._params["acqirisChannel"]+1])
       data.set(v = v)
       data.set(varsum=varsum)
       data.commit()
@@ -212,16 +212,16 @@ class Instr(Instrument):
     
   def switchingProbability(self):
     self._acqiris.bifurcationMap(ntimes = 80)
-    p = self._acqiris.probabilities()[self._acqirisChannel/2,0]
+    p = self._acqiris.probabilities()[self._params["acqirisChannel"]/2,0]
     return p
     
   def separationMeasure(self,acquire = True):
     if acquire:
       self._acqiris.bifurcationMap()
     trends = self._acqiris.trends()
-    angle = self._acqiris.bifurcationMapRotation()[self._acqirisChannel/2]
-    rotatedTrends = zeros((2,len(trends[self._acqirisChannel])))
-    rotatedTrends[0,:] = trends[self._acqirisChannel,:]*cos(angle) + trends[self._acqirisChannel+1,:]*sin(angle)
+    angle = self._acqiris.bifurcationMapRotation()[self._params["acqirisChannel"]/2]
+    rotatedTrends = zeros((2,len(trends[self._params["acqirisChannel"]])))
+    rotatedTrends[0,:] = trends[self._params["acqirisChannel"],:]*cos(angle) + trends[self._params["acqirisChannel"]+1,:]*sin(angle)
     left = []
     right = []
     for value in rotatedTrends[0,:]:
@@ -247,12 +247,12 @@ class Instr(Instrument):
     
   def acquire(self,ntimes = 20):
     self._acqiris.bifurcationMap(ntimes = ntimes)
-    angle = self._acqiris.bifurcationMapRotation()[self._acqirisChannel/2]
-    p = self._acqiris.probabilities()[self._acqirisChannel/2,0]
+    angle = self._acqiris.bifurcationMapRotation()[self._params["acqirisChannel"]/2]
+    p = self._acqiris.probabilities()[self._params["acqirisChannel"]/2,0]
     trends = self._acqiris.trends()
     rotatedTrends = zeros((2,len(trends[0])))
-    rotatedTrends[0,:] = trends[self._acqirisChannel,:]*cos(angle) + trends[self._acqirisChannel+1,:]*sin(angle)
-    rotatedTrends[1,:] = -trends[self._acqirisChannel,:]*sin(angle) + trends[self._acqirisChannel+1,:]*cos(angle)
+    rotatedTrends[0,:] = trends[self._params["acqirisChannel"],:]*cos(angle) + trends[self._params["acqirisChannel"]+1,:]*sin(angle)
+    rotatedTrends[1,:] = -trends[self._params["acqirisChannel"],:]*sin(angle) + trends[self._params["acqirisChannel"]+1,:]*cos(angle)
     return (p,rotatedTrends)
         
   def adjustSwitchingLevel(self,level = 0.2,accuracy = 0.05,verbose = False,minSensitivity = 15.0,microwaveOff = True,nmax = 100):
@@ -397,9 +397,9 @@ class Instr(Instrument):
       self._qubitmwg.turnOff()        # and switch microw off
       self._attenuator.turnOn()       # switch attenuator control voltage to on
       #We set all offsets and angles to 0.
-      self._acqiris.ConfigureChannel(self._acqirisChannel+1,offset = 0)
-      self._acqiris.ConfigureChannel(self._acqirisChannel+2,offset = 0)
-      self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,0)
+      self._acqiris.ConfigureChannel(self._params["acqirisChannel"]+1,offset = 0)
+      self._acqiris.ConfigureChannel(self._params["acqirisChannel"]+2,offset = 0)
+      self._acqiris.setBifurcationMapRotation(self._params["acqirisChannel"]/2,0)
       cnt = 0  
       offsets = [0,0]                 # reinit offsets
       while cnt < 3:                  # repeat for higher precision
@@ -407,16 +407,16 @@ class Instr(Instrument):
         cnt+=1
         self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 40)    
         trends = self._acqiris.trends()
-        means = mean(trends[self._acqirisChannel:self._acqirisChannel+2,:],axis = 1)    
-        covar = var(trends[self._acqirisChannel:self._acqirisChannel+2,:])    
+        means = mean(trends[self._params["acqirisChannel"]:self._params["acqirisChannel"]+2,:],axis = 1)    
+        covar = var(trends[self._params["acqirisChannel"]:self._params["acqirisChannel"]+2,:])    
         offsets[0]-=means[0]
         offsets[1]-=means[1]    
         self.notify("iqdata",trends)
-        self._acqiris.ConfigureChannel(self._acqirisChannel+1,offset = offsets[0])
-        self._acqiris.ConfigureChannel(self._acqirisChannel+2,offset = offsets[1])   
+        self._acqiris.ConfigureChannel(self._params["acqirisChannel"]+1,offset = offsets[0])
+        self._acqiris.ConfigureChannel(self._params["acqirisChannel"]+2,offset = offsets[1])   
         print covar   
         print means
-      covar = cov(trends[self._acqirisChannel]-means[0],trends[self._acqirisChannel+1]-means[1]) 
+      covar = cov(trends[self._params["acqirisChannel"]]-means[0],trends[self._params["acqirisChannel"]+1]-means[1]) 
       #We calculate the eigenvectors of the variance/covariance matrix.  
       la,v = linalg.eig(covar)    
       #We calculate the rotation angle from the eigenvector matrix.
@@ -425,22 +425,22 @@ class Instr(Instrument):
         angle = math.atan2(v[0,0],v[0,1])
       else:
         angle = math.atan2(v[1,0],v[0,0])    
-      self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,angle)
-      pBefore = self._acqiris.probabilities()[self._acqirisChannel/2,0]
+      self._acqiris.setBifurcationMapRotation(self._params["acqirisChannel"]/2,angle)
+      pBefore = self._acqiris.probabilities()[self._params["acqirisChannel"]/2,0]
       oldVoltage = self._attenuator.voltage()
       self._attenuator.setVoltage(oldVoltage+0.1)
       self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 80)
-      pAfter = self._acqiris.probabilities()[self._acqirisChannel/2,0]
+      pAfter = self._acqiris.probabilities()[self._params["acqirisChannel"]/2,0]
       if pAfter > pBefore:
         angle+=math.pi
-        self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,angle)    
+        self._acqiris.setBifurcationMapRotation(self._params["acqirisChannel"]/2,angle)    
       self._attenuator.setVoltage(oldVoltage)
       self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 80)
       trends = self._acqiris.trends()
       self.trends = zeros((2,len(trends[0,:])))
   
-      self.trends[0,:] = trends[self._acqirisChannel,:]*cos(angle) + trends[self._acqirisChannel+1,:]*sin(angle)
-      self.trends[1,:] = -trends[self._acqirisChannel,:]*sin(angle) + trends[self._acqirisChannel+1,:]*cos(angle)
+      self.trends[0,:] = trends[self._params["acqirisChannel"],:]*cos(angle) + trends[self._params["acqirisChannel"]+1,:]*sin(angle)
+      self.trends[1,:] = -trends[self._params["acqirisChannel"],:]*sin(angle) + trends[self._params["acqirisChannel"]+1,:]*cos(angle)
       
       print cov(self.trends[0],self.trends[1])
   
@@ -461,16 +461,16 @@ class Instr(Instrument):
         cnt+=1
         self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 40)    
         trends = self._acqiris.trends()
-        means = mean(trends[self._acqirisChannel:self._acqirisChannel+2,:],axis = 1)    
+        means = mean(trends[self._params["acqirisChannel"]:self._params["acqirisChannel"]+2,:],axis = 1)    
         offsets[0]-=means[0]
         offsets[1]-=means[1]    
         self.notify("iqdata",trends)
-        self._acqiris.ConfigureChannel(self._acqirisChannel+1,offset = offsets[0])
-        self._acqiris.ConfigureChannel(self._acqirisChannel+2,offset = offsets[1])   
+        self._acqiris.ConfigureChannel(self._params["acqirisChannel"]+1,offset = offsets[0])
+        self._acqiris.ConfigureChannel(self._params["acqirisChannel"]+2,offset = offsets[1])   
         print means
-      angle=self_.acqiris.parameters()["rotation"][self._acqirisChannel]
+      angle=self_.acqiris.parameters()["rotation"][self._params["acqirisChannel"]]
       #We calculate the covariance matrix. 
-      covar = cov(trends[self._acqirisChannel]-means[0],trends[self._acqirisChannel+1]-means[1]) 
+      covar = cov(trends[self._params["acqirisChannel"]]-means[0],trends[self._params["acqirisChannel"]+1]-means[1]) 
       la,v = linalg.eig(covar)        #We calculate the eigenvalues and eigenvectors of the covariance matrix.    
       #We calculate the rotation angle from the eigenvector matrix M = [(cos(theta),-sin(theta)),(sin(theta),cos(theta))], using the eigenvector of maximum weight (max eigenvalues)
       if la[1] > la[0]:
@@ -480,22 +480,22 @@ class Instr(Instrument):
       pi=math.pi
       angle=math.fmod(angle+pi,2*pi)-pi    
       #We set the rotation angle
-      self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,angle)
-      pBefore = self._acqiris.probabilities()[self._acqirisChannel/2,0]
+      self._acqiris.setBifurcationMapRotation(self._params["acqirisChannel"]/2,angle)
+      pBefore = self._acqiris.probabilities()[self._params["acqirisChannel"]/2,0]
       oldVoltage = self._attenuator.voltage()
       self._attenuator.setVoltage(oldVoltage+0.1)
       self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 80)
-      pAfter = self._acqiris.probabilities()[self._acqirisChannel/2,0]
+      pAfter = self._acqiris.probabilities()[self._params["acqirisChannel"]/2,0]
       if pAfter > pBefore:
         angle=math.fmod(angle+2*pi,2*pi)-pi
-        self._acqiris.setBifurcationMapRotation(self._acqirisChannel/2,angle)    
+        self._acqiris.setBifurcationMapRotation(self._params["acqirisChannel"]/2,angle)    
       self._attenuator.setVoltage(oldVoltage)
       self._acqiris.bifurcationMap(calculateTrends = True,ntimes = 80)
       trends = self._acqiris.trends()
       self.trends = zeros((2,len(trends[0,:])))
   
-      self.trends[0,:] = trends[self._acqirisChannel,:]*cos(angle) + trends[self._acqirisChannel+1,:]*sin(angle)
-      self.trends[1,:] = -trends[self._acqirisChannel,:]*sin(angle) + trends[self._acqirisChannel+1,:]*cos(angle)
+      self.trends[0,:] = trends[self._params["acqirisChannel"],:]*cos(angle) + trends[self._params["acqirisChannel"]+1,:]*sin(angle)
+      self.trends[1,:] = -trends[self._params["acqirisChannel"],:]*sin(angle) + trends[self._params["acqirisChannel"]+1,:]*cos(angle)
       
       print cov(self.trends[0],self.trends[1])
   
@@ -504,27 +504,22 @@ class Instr(Instrument):
       if state == True:
         self._qubitmwg.turnOn()
         
-  def initialize(self, params = dict(),acqirisChannel = 0,variable = "p1x",muwave = "cavity1mwg",attenuator  = "AttS2",acqiris = "acqiris",qubitmwg = "qubit1mwg",polarity = 1,afg = "afg3",waveform = "USER1",internalDelay = 243,returnDelay = 57,acquisitionTime = 250,sampleInterval = 1e-9,trigSlope = 0,safetyMargin = 100):
+  def initialize(self,**kwargs):
     manager = Manager()
-    self._muwave = manager.getInstrument(muwave)
-    self._register = manager.getInstrument("register")
-    self._acqiris = manager.getInstrument(acqiris)
-    self._afg = manager.getInstrument(afg)
-    self._waveform = waveform
-    self._attenuator = manager.getInstrument(attenuator)
-    self._acqirisChannel = acqirisChannel
-    self._qubitmwg = manager.getInstrument(qubitmwg)
-
-    if hasattr(self,"_params"):
-      return
     
-    self._params = params
-  
-    self._params["variable"] = variable
-    self._params["safetyMargin"] = safetyMargin
-    self._params["internalDelay"] = internalDelay
-    self._params["returnDelay"] = returnDelay
-    self._params["acquisitionTime"] = acquisitionTime
-    self._params["sampleInterval"] = sampleInterval
-    self._params["trigSlope"] = trigSlope
-#    self.loadReadoutWaveform()
+    defaultParams = {'acqirisChannel' : 0,'variable' : "p1x",'muwave' : "cavity1mwg",'attenuator' : "AttS2",'acqiris' : "acqiris",'qubitmwg' : "qubit1mwg",'polarity' : 1,'afg' : "afg3",'waveform' : "USER1",'internalDelay' : 243,'returnDelay' : 57,'acquisitionTime' : 400,'sampleInterval' : 3e-9,'trigSlope' : 0,'safetyMargin' : 100}
+
+    self._params = kwargs
+    
+    for key in defaultParams.keys():
+      if not key in self._params:
+        self._params[key] = defaultParams[key]
+    
+    self._muwave = manager.getInstrument(self._params["muwave"])
+    self._register = manager.getInstrument("register")
+    self._acqiris = manager.getInstrument(self._params["acqiris"])
+    self._afg = manager.getInstrument(self._params["afg"])
+    self._attenuator = manager.getInstrument(self._params["attenuator"])
+    self._qubitmwg = manager.getInstrument(self._params["qubitmwg"])
+      
+    self.loadReadoutWaveform()

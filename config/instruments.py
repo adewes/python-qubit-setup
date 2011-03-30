@@ -18,63 +18,9 @@ from pyview.config.parameters import params
 
 print "Initializing instruments..."
 
-serverHost = "127.0.0.1:8000"
+serverAddress = "rip://127.0.0.1:8000"
 
 instrumentManager = Manager()
-
-#The parameter register
-register = instrumentManager.initInstrument("rip://%s/register" % serverHost,forceReload = True)
-
-#The temperature information.
-temperature = instrumentManager.initInstrument('rip://%s/temperature' % serverHost,"temperature",forceReload = True)
-
-#The temperature information.
-helium_level = instrumentManager.initInstrument('rip://%s/helium_level' % serverHost,"helium_level",forceReload = True)
-
-#The Qubit mu-wave generators
-cavity1_mwg = instrumentManager.initInstrument('rip://%s/Cavity1MWG' % serverHost,"anritsu_mwg",[],{'name' : 'Cavity 1','visaAddress' : "GPIB0::4"},forceReload = True)
-cavity2_mwg = instrumentManager.initInstrument('rip://%s/Cavity2MWG' % serverHost,"anritsu_mwg",[],{'name' : 'Cavity 2','visaAddress' : "GPIB0::6"},forceReload = True)
-
-#The cavity mu-wave generators
-qubit1_mwg = instrumentManager.initInstrument('rip://%s/Qubit1MWG' % serverHost,"agilent_mwg",kwargs = {'name' : 'Qubit 1','visaAddress' : "TCPIP::192.168.0.12"},forceReload = True)
-qubit2_mwg = instrumentManager.initInstrument('rip://%s/Qubit2MWG' % serverHost,"agilent_mwg",kwargs = {'name' : 'Qubit 2','visaAddress' : "TCPIP::192.168.0.13"},forceReload = True)
-
-#The two VNAs
-vna1 = instrumentManager.initInstrument('rip://%s/VNA1' % serverHost,"vna",kwargs = {'name' : 'VNA Qubit 1','visaAddress' : 'GPIB0::15'},forceReload = True)
-#vna2 = instrumentManager.initInstrument('rip://192.168.0.1:8000/VNA2',"vna",kwargs = {'name' : 'VNA Qubit 2','visaAddress' : 'GPIB0::16'},forceReload = True)
-
-#The two qubit attenuators
-qubit1_att = instrumentManager.initInstrument('rip://%s/AttS2' % serverHost,"yokogawa",kwargs = {'name' : 'Attenuator Qubit 1','visaAddress' : 'GPIB0::9'},forceReload = True)
-qubit2_att = instrumentManager.initInstrument('rip://%s/AttS3' % serverHost,"yokogawa",kwargs = {'name' : 'Attenuator Qubit 2','visaAddress' : 'GPIB0::19'},forceReload = True)
-
-#The transmon coil
-#transmon_coil = instrumentManager.initInstrument('rip://%s/Coil' % serverHost,"yokogawa",kwargs = {'name' : 'Transmon Coil','visaAddress' : 'GPIB0::2','slewRate':5.0},forceReload = True)
-
-#The Acqiris card
-acqiris = instrumentManager.initInstrument('rip://192.168.0.22:8000/acqiris',"acqiris",kwargs = {'name': 'Acqiris Card'},forceReload = True)
-
-#The Arbitrary Waveform generator
-awg2 = instrumentManager.initInstrument('rip://%s/awg2' % serverHost,"awg",forceReload = True,kwargs = {'visaAddress' : "TCPIP0::192.168.0.14::inst0"})
-awg = instrumentManager.initInstrument('rip://%s/awg' % serverHost,"awg",forceReload = True,kwargs = {'visaAddress' : "TCPIP0::192.168.0.3::inst0"})
-
-##The Rhode & Schwarz FSP
-fsp = instrumentManager.initInstrument("rip://%s/fsp" % serverHost,"fsp",forceReload = True)
-
-#The LeCroy Oscilloscope
-sda = instrumentManager.initInstrument("rip://%s/sda" % serverHost,"lecroy_sda_7",forceReload = True)
-
-#The AFG signal generators
-#afg1 = instrumentManager.initInstrument('rip://%s/afg1' % serverHost,"afg",kwargs = {"name": "AFG 1, Channel 1"},forceReload = True)
-#afg2 = instrumentManager.initInstrument('rip://%s/afg2' % serverHost,"afg",kwargs = {"name": "AFG 1, Channel 2","source":2},forceReload = True)
-
-afg3 = instrumentManager.initInstrument('rip://%s/afg3' % serverHost,"afg",kwargs = {"visaAddress": "TCPIP0::192.168.0.5::inst0","name": "AFG 2, Channel 1"},forceReload = True)
-afg4 = instrumentManager.initInstrument('rip://%s/afg4' % serverHost,"afg",kwargs = {"visaAddress": "TCPIP0::192.168.0.5::inst0","name": "AFG 2,Channel 2","source":2},forceReload = True)
-
-
-#The two JBAs
-jba1 = instrumentManager.initInstrument('jba1',"jba",kwargs = {"attenuator":'atts2',"acqirisChannel":0,"muwave":'cavity1mwg','waveform':'USER1','afg':'afg3','variable':'p1x'},forceReload = True)
-jba2 = instrumentManager.initInstrument('jba2',"jba",kwargs = {"attenuator":'atts3',"acqirisChannel":2,"muwave":'cavity2mwg','waveform':'USER2','afg':'afg4',"qubitmwg" : "qubit2mwg",'variable':'px1'},forceReload = True)
-
 
 #Load the IQ mixer calibration data for the first qubit.
 qubit1IQOffset = Datacube()
@@ -87,6 +33,8 @@ qubit2IQSideband = Datacube()
 
 fluxline1Response = Datacube()
 fluxline2Response = Datacube()
+
+register = instrumentManager.initInstrument("register")
 
 try:
 
@@ -107,5 +55,110 @@ except:
   print "Cannot load qubit calibration data!"
   print sys.exc_info()
 
-qubit1 = instrumentManager.initInstrument('qubit1',"qubit",kwargs = {'fluxlineTriggerDelay':459,'fluxlineResponse':fluxline1Response,'fluxline':'awg2','fluxlineWaveform':'fluxlineQubit1','fluxlineChannel':1,'iqOffsetCalibration':qubit1IQOffset,'iqSidebandCalibration':qubit1IQSideband,'iqPowerCalibration':qubit1IQPower,'jba':'jba1',"awgChannels":[1,2],"variable":1,"waveforms":["qubit1iReal","qubit1qReal"],"awg":"awg","mwg":"qubit1mwg"},forceReload = True)
-qubit2 = instrumentManager.initInstrument('qubit2',"qubit",kwargs = {'fluxlineTriggerDelay':459,'fluxlineResponse':fluxline2Response,'fluxline':'awg2','fluxlineWaveform':'fluxlineQubit2','fluxlineChannel':2,'iqOffsetCalibration':qubit2IQOffset,'iqSidebandCalibration':qubit2IQSideband,'iqPowerCalibration':qubit2IQPower,'jba':'jba2',"awgChannels":[3,4],"variable":2,"waveforms":["qubit2iReal","qubit2qReal"],"awg":"awg","mwg":"qubit2mwg","acqirisVariable":"px1","additionalFluxlineDelay":-5},forceReload = True)
+instruments = [
+    {
+      'name' : 'register',
+      'serverAddress': serverAddress
+    },
+    {
+      'name' : 'temperature',
+      'serverAddress': serverAddress
+    },
+    {
+      'name' : 'helium_level',
+      'serverAddress': serverAddress
+    },
+    {
+      'name' : 'cavity_1_mwg',
+      'class' : 'anritsu_mwg',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'Cavity 1','visaAddress' : "GPIB0::4"}
+    },
+    {
+      'name' : 'cavity_2_mwg',
+      'class' : 'anritsu_mwg',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'Cavity 2','visaAddress' : "GPIB0::6"}
+    },
+    {
+      'name' : 'qubit_1_mwg',
+      'class' : 'agilent_mwg',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'Qubit 1','visaAddress' : "TCPIP::192.168.0.12"}
+    },
+    {
+      'name' : 'qubit_2_mwg',
+      'class' : 'agilent_mwg',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'Qubit 2','visaAddress' : "TCPIP::192.168.0.13"}
+    },
+    {
+      'name' : 'qubit_1_att',
+      'class' : 'yokogawa',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'Attenuator Qubit 1','visaAddress' : 'GPIB0::9'}
+    },
+    {
+      'name' : 'qubit_2_att',
+      'class' : 'yokogawa',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'Attenuator Qubit 2','visaAddress' : 'GPIB0::19'}
+    },
+    {
+      'name' : 'acqiris',
+      'serverAddress' : 'rip://192.168.0.22:8000',
+      'kwargs' : {'name': 'Acqiris Card'}
+    },
+    {
+      'name' : 'awg',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'visaAddress' : "TCPIP0::192.168.0.3::inst0"}
+    },
+    {
+      'name' : 'awg2',
+      'class' : 'awg',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'visaAddress' : "TCPIP0::192.168.0.14::inst0"}
+    },
+    {
+      'name' : 'fsp',
+      'serverAddress' : serverAddress
+    },
+    {
+      'name' : 'afg3',
+      'class' : 'afg',
+      'serverAddress' : serverAddress,
+      'kwargs' : {"visaAddress": "TCPIP0::192.168.0.5::inst0","name": "AFG 2, Channel 1"}
+    },
+    {
+      'name' : 'afg4',
+      'class' : 'afg',
+      'serverAddress' : serverAddress,
+      'kwargs' : {"visaAddress": "TCPIP0::192.168.0.5::inst0","name": "AFG 2, Channel 2","source":2}
+    },
+    {
+      'name' : 'jba1',
+      'class' : 'jba',
+      'kwargs': {"attenuator":'qubit_1_att',"acqirisChannel":0,"muwave":'cavity_1_mwg','waveform':'USER1','afg':'afg3','variable':'p1x',"qubitmwg":"qubit_1_mwg"}    
+    },
+    {
+      'name' : 'jba2',
+      'class' : 'jba',
+      'kwargs': {"attenuator":'qubit_2_att',"acqirisChannel":2,"muwave":'cavity_2_mwg','waveform':'USER2','afg':'afg4','variable':'px1',"qubitmwg":"qubit_2_mwg"}    
+    },
+    {
+      'name' : 'qubit1',
+      'class' : 'qubit',
+      'kwargs' : {'fluxlineTriggerDelay':459,'fluxlineResponse':fluxline1Response,'fluxline':'awg2','fluxlineWaveform':'fluxlineQubit1','fluxlineChannel':1,'iqOffsetCalibration':qubit1IQOffset,'iqSidebandCalibration':qubit1IQSideband,'iqPowerCalibration':qubit1IQPower,'jba':'jba1',"awgChannels":[1,2],"variable":1,"waveforms":["qubit1iInt","qubit1qInt"],"awg":"awg","mwg":"qubit_1_mwg"}
+    },
+    {
+      'name' : 'qubit2',
+      'class' : 'qubit',
+      'kwargs' : {'fluxlineTriggerDelay':459,'fluxlineResponse':fluxline2Response,'fluxline':'awg2','fluxlineWaveform':'fluxlineQubit2','fluxlineChannel':2,'iqOffsetCalibration':qubit2IQOffset,'iqSidebandCalibration':qubit2IQSideband,'iqPowerCalibration':qubit2IQPower,'jba':'jba2',"awgChannels":[3,4],"variable":2,"waveforms":["qubit2iInt","qubit2qInt"],"awg":"awg","mwg":"qubit_2_mwg","acqirisVariable":"px1","additionalFluxlineDelay":-5}
+    }
+]
+
+instrumentManager.initInstruments(instruments,globalParameters = {'forceReload' : True} )
+
+for name in instrumentManager.instrumentNames():
+  globals()[name] = instrumentManager.getInstrument(name)

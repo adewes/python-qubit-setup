@@ -21,21 +21,21 @@ cla()
 xmin = 2
 xmax = -2
 
-xRef = sReference.allChildren()[0].column("v")[xmin:xmax]
-yRef = sReference.allChildren()[0].column(var)[xmin:xmax]
+xRef = sReference.children()[0].column("v")[xmin:xmax]
+yRef = sReference.children()[0].column(var)[xmin:xmax]
 
-xOn = sData.allChildren()[1].column("v")[xmin:xmax]
-yOn = sData.allChildren()[1].column(var)[xmin:xmax]
-contrast = sData.allChildren()[1].column("contrast10")[xmin:xmax]
+xOn = sData.children()[1].column("v")[xmin:xmax]
+yOn = sData.children()[1].column(var)[xmin:xmax]
+contrast = sData.children()[1].column("contrast10")[xmin:xmax]
 
 if fitS02:
-	xOn2 = sData2.allChildren()[1].column("v")[xmin:xmax]
-	yOff2 = sData2.allChildren()[0].column(var)[xmin:xmax]
-	yOn2 = sData2.allChildren()[1].column(var)[xmin:xmax]
-	contrast2 = sData2.allChildren()[1].column("contrast20")[xmin:xmax]
+	xOn2 = sData2.children()[1].column("v")[xmin:xmax]
+	yOff2 = sData2.children()[0].column(var)[xmin:xmax]
+	yOn2 = sData2.children()[1].column(var)[xmin:xmax]
+	contrast2 = sData2.children()[1].column("contrast20")[xmin:xmax]
 	
-xOff = sData.allChildren()[0].column("v")[xmin:xmax]
-yOff = sData.allChildren()[0].column(var)[xmin:xmax]
+xOff = sData.children()[0].column("v")[xmin:xmax]
+yOff = sData.children()[0].column(var)[xmin:xmax]
 
 plot(xOff,yOff)
 plot(xOn,yOn)

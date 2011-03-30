@@ -33,7 +33,7 @@ def fitRamseyFrequency(cube,variable = "p1x",f_offset=0.003):
 	return (params,rsquare)
 
 def fitRabi12Frequency(cube,variable = "p1x"):
-	result = fitRabi12(cube.column("duration"),cube.column(variable))		
+	result = fitRabi(cube.column("duration"),cube.column(variable),fit12 = True)		
 	if result == None:
 		return None
 	(params,fitfunc,rsquare) = result
@@ -162,112 +162,47 @@ def fitDoubleLorentzian(fs,p1,initParams,cavity = 6.85):
   return (fittedParams.tolist(),fitfunc,rsquare)
 
 #This function fits a lorentzian to a given Qubit spectroscopic curve...
-def fitRabi(fs,p1,ps = None,withOffset = False,f=None,t=100):
-  maxP = 0
-  minP = 0
-  maxI = 0
-  avg = mean(p1)
-  integral = 0
-  lastIntegralValue = None
-  signChanges = 0
-  period = None
-  for i in range(1,len(fs)-1):
-    v = (p1[i]+p1[i+1]+p1[i-1])/3.0
-    integral+=v-avg
-    if i == 1 or v < minP:
-      minP = v
-    if i == 1 or v>maxP:
-    	maxP = v
-    	maxI = i
-    if lastIntegralValue != None and sign(integral) != sign(lastIntegralValue) and period == None:
-      signChanges+=1
-    lastIntegralValue = integral
-  if period == None:
-    if signChanges == 0:
-      period = fs[i]-fs[0]
-    else:
-      period = (fs[i]-fs[0])/float(signChanges)*3.0/2.0
-  if f!=None and f!=0:
-    period=1/f
+def fitRabi(fs,p1,ps = None,withOffset = False,f=None,t=100,fit12 = False):
+
   import numpy
-  smean = numpy.mean(p1)
-  
   import math
   import scipy
   import scipy.optimize
   import random
-  
-  if withOffset:
-    fitfunc = lambda p, x: p[3]-p[0]*scipy.cos(-p[4]+x/abs(p[1])*math.pi*2.0)*scipy.exp(-x/p[2])
-  else:
-    fitfunc = lambda p, x: p[3]-p[0]*scipy.cos(x/abs(p[1])*math.pi*2.0)*scipy.exp(-x/p[2])
-  errfunc = lambda p, x, y,ff: numpy.linalg.norm((ff(p,x)-y))
-  if ps == None:
-    if withOffset:
-    	ps = [(maxP-minP)/2.0,period,t,(minP+maxP)/2.0,0]
-    else:
-    	ps = [(maxP-minP)/2.0,period,t,(minP+maxP)/2.0]
   import numpy.linalg
+  
+  if fit12:
+    fitfunc = lambda p, x: p[4]*scipy.exp(-x/p[2])+p[0]*scipy.cos(x/p[1]*math.pi*2.0+p[3])*scipy.exp(-x/p[5])
+  else:
+    if withOffset:
+      fitfunc = lambda p, x: p[3]-p[0]*scipy.cos(-p[4]+x/abs(p[1])*math.pi*2.0)*scipy.exp(-x/p[2])
+    else:
+      fitfunc = lambda p, x: p[3]-p[0]*scipy.cos(x/abs(p[1])*math.pi*2.0)*scipy.exp(-x/p[2])
+  errfunc = lambda p, x, y,ff: numpy.linalg.norm((ff(p,x)-y))
+
+  if ps == None:
+    if fit12:
+      ps = [(max(p1)-min(p1))/2.0,1,t,(min(p1)+max(p1))/2.0,max(p1),100]
+    else:
+      if withOffset:
+      	ps = [(max(p1)-min(p1))/2.0,1,t,(min(p1)+max(p1))/2.0,0]
+      else:
+      	ps = [(max(p1)-min(p1))/2.0,1,t,(min(p1)+max(p1))/2.0]
+
   rsquare = 0.0
-  cnt = 0
-  while rsquare < 0.5 and cnt < 20:
-    cnt+=1.0
-    ps[1]+=cnt
-    p1s = scipy.optimize.fmin(errfunc, ps,args=(fs,p1,fitfunc),maxfun = 1e5,maxiter = 1e5)
+  ps[1] = 20
+  while rsquare < 0.5 and ps[1] < 30.0:
+    ps[1]-=0.5
+    p1s = scipy.optimize.fmin(errfunc, ps,args=(fs,p1,fitfunc),maxfun = 1e3,maxiter = 1e3)
     rsquare = 1.0-numpy.cov(p1-fitfunc(p1s,fs))/numpy.cov(p1)
     if p1s[1] < 2:
       rsquare = 0
       #Period is too small (a very small period can give a good fit due to undersampling of the resulting curve...)
-  print p1s
-  p1s[1] = abs(p1s[1])
-  print "Period: %g ns" % p1s[1]
-  return (p1s.tolist(),fitfunc,float(rsquare))
-
-#This funct2ion fits a lorentzian to a given Qubit spectroscopic curve...
-def fitRabi12(fs,p1,ps = None):
-  maxP = 0
-  minP = 0
-  maxI = 0
-  avg = mean(p1)
-  integral = 0
-  lastIntegralValue = None
-  signChanges = 0
-  period = None
-  for i in range(1,len(fs)-1):
-    v = (p1[i]+p1[i+1]+p1[i-1])/3.0
-    integral+=v-avg
-    if i == 1 or v < minP:
-      minP = v
-    if i == 1 or v>maxP:
-    	maxP = v
-    	maxI = i
-    if lastIntegralValue != None and sign(integral) != sign(lastIntegralValue) and period == None:
-      signChanges+=1
-    lastIntegralValue = integral
-  if period == None:
-    if signChanges == 0:
-      period = fs[i]-fs[0]
-    else:
-      period = (fs[i]-fs[0])/float(signChanges)*3.0/2.0
-  import numpy
-  smean = numpy.mean(p1)
-  
-  import math
-  import scipy
-  import scipy.optimize
-  
-  fitfunc = lambda p, x: p[3]*scipy.exp(-x/p[2])-p[0]*scipy.cos(x/p[1]*math.pi*2.0+p[4])
-  errfunc = lambda p, x, y,ff: numpy.linalg.norm((ff(p,x)-y))
-  print minP,maxP
-  if ps == None:
-  	ps = [(maxP-minP)/2.0,period,500.0,(minP+maxP)/2.0,0]
-  import numpy.linalg
-  p1s = scipy.optimize.fmin(errfunc, ps,args=(fs,p1,fitfunc))
-  p1s = scipy.optimize.fmin(errfunc, p1s,args=(fs,p1,fitfunc))
-  p1s = scipy.optimize.fmin(errfunc, p1s,args=(fs,p1,fitfunc))
-#  p1s = ps
+  p1s = scipy.optimize.fmin(errfunc, p1s,args=(fs,p1,fitfunc),maxfun = 1e3,maxiter = 1e3)
   rsquare = 1.0-numpy.cov(p1-fitfunc(p1s,fs))/numpy.cov(p1)
-  return (p1s.tolist(),fitfunc,rsquare)
+  p1s[1] = abs(p1s[1])
+  print "Period: %g ns, R2: %g" % (p1s[1],rsquare)
+  return (p1s.tolist(),fitfunc,float(rsquare))
 
 def fitT1(fs,p1):
 	max = 0

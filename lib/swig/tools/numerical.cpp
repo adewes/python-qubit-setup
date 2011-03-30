@@ -17,3 +17,14 @@ int awg_pack_real_data(int len,float *values,unsigned char *markers,unsigned cha
 	}
 	return len;
 }
+
+int awg_pack_int_data(int len,unsigned short *values,unsigned char *markers,unsigned char *output)
+{
+	for(int i=0;i<len;i++)
+	{
+		output[i*2]   = (char)values[i] & 0xFF;
+		output[i*2+1] = (char)(values[i] >> 8) & (0xFF >> 2) ;
+		output[i*2+1] += (char)(markers[i] << 6);
+	}
+	return len;
+}

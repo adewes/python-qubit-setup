@@ -34,6 +34,9 @@ class Instr(Instrument):
       return True
     return False
   
+  def keys(self):
+    return self._register.keys()
+  
   def __setitem__(self,key,value):
     """
     Store a variable in the register.

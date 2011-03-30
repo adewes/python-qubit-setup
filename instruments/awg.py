@@ -3,6 +3,7 @@ import ctypes
 import getopt
 import re
 import struct
+import time
 
 """
 .. module:: useful_1
@@ -96,6 +97,28 @@ class Instr(VisaInstrument):
       if re.search(r'\.awg$',filestr[0],re.I):
         setups.append(filestr[0])
     return setups
+
+  def writeIntData(self,values,markers):
+    """
+    Writes integer data to a string.
+    """
+    valuesInt = numpy.zeros(len(values),dtype = numpy.ushort)
+    markersInt = numpy.zeros(len(markers),dtype = numpy.uint8)
+
+    valuesInt[:] = values[:]
+    markersInt[:] = markers[:]
+    buf = ctypes.create_string_buffer(len(valuesInt)*2)
+    numerical.awg_pack_int_data(len(valuesInt),valuesInt.ctypes.data,markersInt.ctypes.data,ctypes.addressof(buf))
+    return buf.raw
+
+    #Legacy code...
+
+    output = ""
+    for i in range(0,len(values)):
+      marker = int(markers[i])
+      value = int(values[i])
+      output+=struct.pack("<H",((marker & 3) << 14) + (value & (0xFFFF >> 2)))
+    return output
     
   def writeRealData(self,values,markers):
     """
@@ -333,17 +356,6 @@ class Instr(VisaInstrument):
     Returns the offset of a given channel.
     """
     return float(self.ask("SOURCE%d:VOLTAGE:LEVEL:IMMEDIATE:OFFSET?" % channel))
-
-  def writeIntData(self,values,markers):
-    """
-    Writes integer data to a string.
-    """
-    output = ""
-    for i in range(0,len(values)):
-      marker = int(markers[i])
-      value = int(values[i])
-      output+=struct.pack("H",((marker & 3) << 14) + ((value & 0xFF) << 6))
-    return output
     
   def writeMarkers(self,markers):
     """
@@ -421,6 +433,7 @@ class Instr(VisaInstrument):
     self.write("WLIST:WAVEFORM:NEW \"%s\",%d,%s" %(name,size,wavetype))     
     header = "#%d%d" % (len("%d" % len(data)),len(data))
     self.write("WLIST:WAVEFORM:DATA \"%s\",0,%d," %(name,size)+header+data)
+    time.sleep(self._waitTime)
 
   def updateMarkers(self,name,markers):
     """
@@ -430,6 +443,7 @@ class Instr(VisaInstrument):
     size = len(markers)
     header = "#%d%d" % (len("%d" % len(data)),len(data))
     self.write("WLIST:WAVEFORM:MARKER:DATA \"%s\",0,%d," %(name,size) +header+data)
+    time.sleep(self._waitTime)
  
   def getMarkers(self,name):
     """
@@ -495,13 +509,20 @@ class Instr(VisaInstrument):
     
   def getWaveforms(self):
     return self.waveforms
-  
-  def initialize(self,visaAddress = "TCPIP0::192.168.0.3::inst0"):
+    
+  def setWaitTime(self,time):
+    self._waitTime = time
+    
+  def waitTime(self):
+    return self._waitTime
+    
+  def initialize(self,visaAddress = "TCPIP0::192.168.0.3::inst0",waitTime = 0):
     """
     Initializes the AWG.
     """
     try:
       self.waveforms = []
+      self._waitTime = waitTime
       self._name = "Tektronix AWG"
       self._visaAddress = visaAddress
       print "Initializing AWG with address %s" % visaAddress
