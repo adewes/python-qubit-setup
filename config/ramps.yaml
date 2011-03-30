@@ -109,7 +109,7 @@ root:
     - children: []
       codeSnippet: !!python/unicode "saveData = True\nloadArguments()\n\nimport scripts\n\
         from config.startup import *\nimportModule(\"scripts.experiment.measure\"\
-        )\n\nfreqs = arange(5.7,6.5,0.002)\namp = 0.05\n\nqubit1.parameters()[\"pulses.xy.f_shift\"\
+        )\n\nfreqs = arange(6.1,6.5,0.002)\namp = 0.2\n\nqubit1.parameters()[\"pulses.xy.f_shift\"\
         ]=0\n\nqubit1.loadFluxlineBaseWaveform()\nqubit2.loadFluxlineBaseWaveform()\n\
         \nscripts.experiment.measure.spectroscopy(qubit = qubit1,frequencies = freqs,variable\
         \ = \"p1x\",\tdata = data,ntimes = 20,amplitude = amp,measureAtReadout = False,measure20\
