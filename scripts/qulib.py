@@ -49,6 +49,10 @@ def roty(angle):
 def rotz(angle):
 	return matrix([[exp(-1j*angle/2.0),0],[0,exp(1j*angle/2.0)]])
 
+def rotn(angle,n):
+	(nx,ny,nz) = n
+	return matrix([[cos(angle/2.0)-1j*nz*sin(angle/2.0),(-1j*nx-ny)*sin(angle/2.0)],[(-1j*nx+ny)*sin(angle/2.0),cos(angle/2.0)+1j*nz*sin(angle/2.0)]])
+
 def createMeasurement(tensor,verbose = False):
 
 	(eigenvalues,eigenvectors) = eigh(tensor)
@@ -192,7 +196,6 @@ def reconstructDensityMatrix(measurements,values):
 			tr = trace(measurements[i]*measurements[j])
 			cm[i,j] = tr
 			cm[j,i] = tr
-	print cm
 	x = solve(cm,values)
 
 	rho = matrix(zeros(measurements[0].shape))	

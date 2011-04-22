@@ -1,3 +1,5 @@
+from config.startup import *
+
 figure("qubit pulses")
 clf()
 xmax = max(len(qubit1.fluxlineWaveform()),len(qubit2.fluxlineWaveform()))
@@ -47,8 +49,8 @@ plot(linspace(qubit2.readoutDelay(),qubit2.readoutDelay()+len(jba2.readoutWavefo
 axvline(qubit1.readoutDelay()+delay)
 axvline(qubit1.readoutDelay()+delay+numberOfPoints*sampleInterval)
 
-
-
 xlabel("time [ns]")
 
 legend(("Q1","Q2"))
+
+show()

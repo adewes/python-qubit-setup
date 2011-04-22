@@ -2,7 +2,9 @@
 #Prerequisites:
 # -The length and amplitude of a non-gaussian, rectangular pi-pulse must be defined for the qubit to be investigated.
 # - The JBA has to be calibrated at the value of the magnetic flux given by (readoutFlux)
-def maximizeSwitching(qubit,jba,waveform,t,readoutFlux = 0.5,readoutMargin = 30,fastMethod = False,samplingRate = 1.0,hot = True,cube = None,preCompensate = False,factor = 1.0,startRange = arange(-0.05,0.05,0.005)):
+from config.startup import *
+
+def maximizeSwitching(qubit,jba,waveform,t,readoutMargin = 30,fastMethod = False,samplingRate = 1.0,hot = True,cube = None,preCompensate = False,factor = 1.0,startRange = arange(-0.4,0.2,0.04)):
  	"""
 	Reconstructs the value of flux of a fluxline waveform (waveform).
 	The following method is used to reconstruct the value of the magnetic flux at the qubit:
@@ -22,62 +24,55 @@ def maximizeSwitching(qubit,jba,waveform,t,readoutFlux = 0.5,readoutMargin = 30,
 		minFlux = min(waveform)
 		maxFlux = max(waveform)
 		
-		baseWaveform = qubit.fluxlineWaveform()
+		baseWaveform = qubit.fluxlineBaseWaveform()
 		readout = qubit.parameters()["timing.readout"]
-		newWaveform = zeros(len(baseWaveform)-t)
-		print len(newWaveform)
-		newWaveform[:] = baseWaveform[:len(newWaveform)]
-		newWaveform[readout-t:] = baseWaveform[readout:]
-		qubit.loadRabiPulse(phase = math.pi,readout = readout - t)
+		baseWaveform[readout-t:readout] += waveform[:t]
+
+		f_sb = qubit.parameters()["pulses.xy.f_sb"]
+		f01 = qubit.parameters()["frequencies.f01"]
 		
-		figure("waveforms")
-		cla()
-		plot(baseWaveform)
-		plot(newWaveform)
-
-		qubit.loadFluxlineWaveform(newWaveform,compensateResponse = preCompensate,factor = factor,samplingInterval = 1.0)
-
+		qubit.loadRabiPulse(phase = math.pi,readout = readout+readoutMargin,delay = readoutMargin,gaussian = False)
+		
 		if cube == None:
 			cube = Datacube()
 		
 		cube.setName("Switching probability optimization at t = %g ns" % t )
 		cube.setParameters(instrumentManager.parameters())
 		
-		steps = 10
+		steps = 30
 		
 		span = fabs(max(-1,-1-min(waveform))-min(1.0,1-max(waveform)))
 		
-		rounds = 2
+		rounds = 3
 		cnt = 0
 		searchRange = startRange
 		span = max(searchRange)-min(searchRange)
 		
+		qubit.loadFluxlineWaveform(baseWaveform,compensateResponse = preCompensate,factor = factor)
+		qubit.loadRabiPulse(phase = math.pi,readout = readout+readoutMargin,delay = readoutMargin,gaussian = True,f_sb = f_sb)
+	
 		while cnt<rounds:
 			roundCube = Datacube("Fitting, step %d" % (cnt+1))
+			roundCube.parameters()["defaultPlot"] = [["f","p"],["f","p_fit"]]
 			cube.addChild(roundCube)
-			#Vary (extraFlux) and measure the switching probability of the qubit:
+			#Vary (f) and measure the switching probability of the qubit:
 		  
-			for extraFlux in searchRange:	
-		    
-				modifiedWaveform = zeros(len(newWaveform))
-				modifiedWaveform[:] = newWaveform[:]
-				modifiedWaveform[1:readout-t]+=extraFlux
-				qubit.loadFluxlineWaveform(modifiedWaveform,compensateResponse = preCompensate,factor = factor,samplingInterval = 1.0)
-				if cnt == rounds-1:
-					ntimes = 200
-				else:
-					ntimes = 20
+			for f in searchRange:	
+				
+				qubit.setDriveFrequency(f01+f+f_sb)
+				qubit.setDriveAmplitude(I = qubit.parameters()["pulses.xy.drive_amplitude"],Q = qubit.parameters()["pulses.xy.drive_amplitude"])
+				ntimes = 40
 				p = qubit.Psw(ntimes = ntimes)
-				print "flux = %g, p = %g" % (extraFlux,p)
-				roundCube.set(p = p , t = t,extraFlux = extraFlux)
+				roundCube.set(p = p , t = t,f = f)
 				roundCube.commit()
-			maxFlux = roundCube.column("extraFlux")[argmax(roundCube.column("p"))]
+
+			maxFlux = roundCube.column("f")[argmax(roundCube.column("p"))]
 			maxP = roundCube.column("p")[argmax(roundCube.column("p"))]
-			result = fitLorentzian(roundCube.column("extraFlux"),roundCube.column("p"))
+			result = fitLorentzian(roundCube.column("f"),roundCube.column("p"))
 			(params,fitfunc,rsquare) = result
 			maxFlux = -params[1]
 			maxP = params[0]
-			roundCube.createColumn("p_fit",fitfunc(params,roundCube.column("extraFlux")))	
+			roundCube.createColumn("p_fit",fitfunc(params,roundCube.column("f")))	
 			#Divide the search span by 2 and center it around the maximum found in the current step:
 			span/=4.0
 			cnt+=1
@@ -85,6 +80,7 @@ def maximizeSwitching(qubit,jba,waveform,t,readoutFlux = 0.5,readoutMargin = 30,
 			#Return the parameters of the best fit:
 		return (-maxFlux,maxP,cube)
 	finally:
+		pass
 		qubit.popState()
 ##Parameters for qubit 2:
 qubit = qubit2
@@ -94,7 +90,6 @@ name = "qubit 2"
 ##Parameters for qubit 1:
 qubit = qubit1
 jba = jba1
-readoutFlux = 0.5
 name = "qubit 1"
 ##Perform the tomography:
 times = list(arange(210,500,1))
@@ -103,10 +98,15 @@ data = Datacube("pulse tomography of %s" % name)
 data.setParameters(instrumentManager.parameters())
 dataManager.addDatacube(data)
 
-for t in arange(100,1000,100):
+tomographyWaveform = zeros(2000)
+tomographyWaveform[1000:] = 0.1
+
+ts = list(arange(1000,1050,1))+list(arange(1050,1100,5))+list(arange(1100,1400,10))+list(arange(1400,2000,100))
+
+for t in ts:
 	cube = Datacube()
 	data.addChild(cube)
-	(flux,maximum,rcube) = maximizeSwitching(qubit,jba,tomographyWaveform,t = t,readoutMargin = 20,readoutFlux = readoutFlux,cube = cube,preCompensate = True,factor = 0.8)
+	(flux,maximum,rcube) = maximizeSwitching(qubit,jba,tomographyWaveform,t = t,readoutMargin = 10,cube = cube,preCompensate = True,factor = 1.0)
 	data.set(t = t,flux = flux,maximum = maximum)
 	data.commit()
 	data.savetxt()

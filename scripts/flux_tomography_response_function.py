@@ -1,6 +1,7 @@
 from numpy.fft import *
 from numpy import *
 from instruments.qubit import gaussianFilter
+from config.startup import *
 
 figure("calibration data")
 cla()

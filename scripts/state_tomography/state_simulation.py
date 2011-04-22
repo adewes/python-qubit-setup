@@ -153,7 +153,7 @@ def convertDatacubeToSpins(data,saveValues = False,indices1=["x","y","z","i"],in
 	return (measuredSpins,measuredProbabilities)
 
 
-def fitDensityMatrix(measuredSpins,measuredProbabilities,hot = False,row = None,rounds = 10):
+def fitDensityMatrix(measuredSpins,measuredProbabilities,hot = False,row = None,rounds = 10,initialGuess = None):
 
 	if measuredSpins.column("mxmx") != None and False:
 		matrices = [sigmax,sigmay,sigmaz,-sigmax,-sigmay,-sigmaz,idatom]
@@ -176,8 +176,9 @@ def fitDensityMatrix(measuredSpins,measuredProbabilities,hot = False,row = None,
 
 	for j in range(0,rounds):
 		print "Round %d" % j
-	
 		rhoGuess = (numpy.random.rand(4,4)+1j*numpy.random.rand(4,4)-numpy.random.rand(4,4)-1j*numpy.random.rand(4,4))*0.5
+		if initialGuess != None:
+			rhoGuess =initialGuess+rhoGuess*0.1
 		if row != None:
 			rhoGuess[0,0] = measuredProbabilities.column("zz00")[row]
 			rhoGuess[1,1] = measuredProbabilities.column("zz10")[row]
@@ -206,7 +207,10 @@ def fitDensityMatrix(measuredSpins,measuredProbabilities,hot = False,row = None,
 				measuredSpins.savetxt(forceSave = True)
 				if hot:
 					plotDensityMatrix(densityMatrix,"rho")
+					show()
 			except:
+				import traceback
+				traceback.print_exc()
 				print sys.exc_info()
 	return densityMatrix	
 

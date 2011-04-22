@@ -115,34 +115,22 @@ def fitGaussian(fs,p1,ps = None):
   rsquare = 1.0-numpy.cov(p1-fitfunc(p1s,fs))/numpy.cov(p1)
   return (p1s.tolist(),fitfunc,rsquare)
 
-	
 #This function fits a lorentzian to a given Qubit spectroscopic curve...
 def fitLorentzian(fs,p1):
-	maxValue = 0
-	maxI = 0
-	nAverage = 2
-	for i in range(nAverage,len(fs)-nAverage):
-		v = 0
-		for j in range(-nAverage,nAverage+1):
-			v+=p1[i+j]
-		v/=nAverage*2+1
-		if (i == 0 or v>maxValue):
-			maxValue = v
-			maxI = i
-	import numpy
-	smean = numpy.mean(p1)
 
-	fitfunc = lambda p, x: p[3]+p[0]/(1.0+pow((x-p[1])/p[2],2.0))
-	errfunc = lambda p, x, y,ff: numpy.linalg.norm(ff(p,x)-y)
+  fitfunc = lambda p, x: p[3]+p[0]/(1.0+pow((x-p[1])/p[2],2.0))
+  errfunc = lambda p, x, y,ff: pow(numpy.linalg.norm(ff(p,x)-y),2.0)
+  
+  ps = [(max(p1)-min(p1)),fs[argmax(p1)],0.001,min(p1)]
 
-	ps = [maxValue-smean,fs[maxI],0.005,min(p1)]
-	print ps
-	import numpy.linalg
-	import scipy
-	import scipy.optimize
-	p1s = scipy.optimize.fmin(errfunc, ps,args=(fs,p1,fitfunc))
-	rsquare = 1.0-numpy.cov(p1-fitfunc(p1s,fs))/numpy.cov(p1)
-	return (p1s.tolist(),fitfunc,rsquare)
+  print "Initial guess:",ps
+
+  import numpy.linalg
+  import scipy
+  import scipy.optimize
+  p1s = scipy.optimize.fmin(errfunc, ps,args=(fs,p1,fitfunc))
+  rsquare = 1.0-numpy.cov(p1-fitfunc(p1s,fs))/numpy.cov(p1)
+  return (p1s.tolist(),fitfunc,rsquare)
 
 #This function fits a lorentzian to a given Qubit spectroscopic curve...
 def fitDoubleLorentzian(fs,p1,initParams,cavity = 6.85):
@@ -191,7 +179,7 @@ def fitRabi(fs,p1,ps = None,withOffset = False,f=None,t=100,fit12 = False):
 
   rsquare = 0.0
   ps[1] = 20
-  while rsquare < 0.5 and ps[1] < 30.0:
+  while rsquare < 0.5 and ps[1] > 0.0:
     ps[1]-=0.5
     p1s = scipy.optimize.fmin(errfunc, ps,args=(fs,p1,fitfunc),maxfun = 1e3,maxiter = 1e3)
     rsquare = 1.0-numpy.cov(p1-fitfunc(p1s,fs))/numpy.cov(p1)

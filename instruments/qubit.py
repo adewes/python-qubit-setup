@@ -127,7 +127,7 @@ class PulseSequence:
     for pulse in self._pulses:
       if len(pulse.shape())+pulse.delay() > maxlen:
         maxlen = len(pulse.shape())+pulse.delay()
-    return maxlen
+    return int(max(maxlen,self._pos))
     
   def clearPulses(self):
     self._pulses = []
@@ -155,15 +155,13 @@ class PulseSequence:
 class Instr(Instrument):
 
       def parameters(self):
-        if "waveforms" in self._params:
-          del self._params["waveforms"]
         return self._params
         
       def saveState(self,name):
         params = copy.deepcopy(self._params)
-        params['waveforms'] = copy.deepcopy(self._waveforms)
-        for key in params["waveforms"]:
-          params["waveforms"][key] = numpy.array(params["waveforms"][key]).tolist()
+        params['waveformData'] = copy.deepcopy(self._waveforms)
+        for key in params["waveformData"]:
+          params["waveformData"][key] = numpy.array(params["waveformData"][key]).tolist()
         return params
       
       def restoreState(self,state):
@@ -178,14 +176,14 @@ class Instr(Instrument):
           else:
             self.turnOffDrive()
         if 'waveforms' in state:
-          if 'fluxline' in state['waveforms']:
+          if 'fluxline' in state['waveformData']:
             print "Restoring fluxline waveform..."
-            self.loadFluxlineWaveform(numpy.array(state['waveforms']['fluxline']),compensateResponse = self._params["fluxline.compensateResponse"],factor = self._params["fluxline.compensationFactor"],samplingInterval = self._params["fluxline.samplingInterval"])
-          if 'drive' in state['waveforms']:
+            self.loadFluxlineWaveform(numpy.array(state['waveformData']['fluxline']),compensateResponse = self._params["fluxline.compensateResponse"],factor = self._params["fluxline.compensationFactor"],samplingInterval = self._params["fluxline.samplingInterval"])
+          if 'drive' in state['waveformData']:
             print "Restoring drive waveform..."
-            self.loadWaveform(state['waveforms']['drive'],readout = state['readoutDelay'])
-        self._waveforms = state['waveforms']
-        del self._params['waveforms']
+            self.loadWaveform(state['waveformData']['drive'],readout = state['readoutDelay'])
+        self._waveforms = state['waveformData']
+        del self._params['waveformData']
         
       def turnOnDrive(self):
         self._mwg.turnOn()
@@ -244,29 +242,36 @@ class Instr(Instrument):
           return self._waveforms["fluxline.base"]
         return []
         
-      def loadFluxlineBaseWaveform(self,parkFlux = None,manipulationFlux = None,readoutFlux = None,readout = None,compensationFactor = None,readoutDelay = None):
-      	
-      	if parkFlux != None:
-          self.parameters()["flux.park"] = float(parkFlux)
-        if manipulationFlux != None:
-        	self.parameters()["flux.manipulation"] = float(manipulationFlux)
-        if readoutFlux != None:
-        	self.parameters()["flux.readout"] = float(readoutFlux)
-        if readout != None:
-        	self.parameters()["timing.readout"] = int(readout)
-        if compensationFactor != None:
-        	self.parameters()["flux.compensationFactor"] = float(compensationFactor)
-        if readoutDelay != None:
-          self.parameters()["timing.readoutDelay"] = int(readoutDelay)
-
-        
-        amp = self._fluxline.amplitude(self._fluxlineChannel)
-        offset = self._fluxline.offset(self._fluxlineChannel)
-      
-      	waveform = numpy.zeros(self.parameters()["timing.readout"]+3500)+(self.parameters()["flux.park"]-offset)/amp*2.0
-      	waveform[1:-1] = (self.parameters()["flux.manipulation"]-offset)/amp*2.0
-      	waveform[self.parameters()["timing.readout"]+self.parameters()["timing.readoutDelay"]:-1] = (self.parameters()["flux.readout"]-offset)/amp*2.0
-      	self.loadFluxlineWaveform(waveform,compensateResponse = True,factor = self.parameters()["flux.compensationFactor"])
+      def loadFluxlineBaseWaveform(self,parkFlux = None,manipulationFlux = None,readoutFlux = None,readout = None,compensationFactor = None,compensateResponse = None,readoutDelay = None,waveform = None):
+        if not 'flux.customWaveform' in self.parameters():
+          self.parameters()["flux.customWaveform"] = False
+        if self.parameters()["flux.customWaveform"] and False:
+          waveform = self._waveforms["fluxline.base"]
+        if waveform != None:
+          self._waveforms["fluxline.base"] = waveform
+          self.parameters()["flux.customWaveform"] = True
+        else:
+          self.parameters()["flux.customWaveform"] = False
+          if parkFlux != None:
+            self.parameters()["flux.park"] = float(parkFlux)
+            if compensateResponse != None:
+              self.parameters()["flux.compensateResponse"] = compensateResponse
+            if manipulationFlux != None:
+            	self.parameters()["flux.manipulation"] = float(manipulationFlux)
+            if readoutFlux != None:
+            	self.parameters()["flux.readout"] = float(readoutFlux)
+            if readout != None:
+            	self.parameters()["timing.readout"] = int(readout)
+            if compensationFactor != None:
+            	self.parameters()["flux.compensationFactor"] = float(compensationFactor)
+            if readoutDelay != None:
+              self.parameters()["timing.readoutDelay"] = int(readoutDelay)
+          amp = self._fluxline.amplitude(self._params["fluxlineChannel"])
+          offset = self._fluxline.offset(self._params["fluxlineChannel"])
+          waveform = numpy.zeros(self.parameters()["timing.readout"]+3500)+(self.parameters()["flux.park"]-offset)/amp*2.0
+          waveform[1:-1] = (self.parameters()["flux.manipulation"]-offset)/amp*2.0
+          waveform[self.parameters()["timing.readout"]+self.parameters()["timing.readoutDelay"]:-1] = (self.parameters()["flux.readout"]-offset)/amp*2.0
+        self.loadFluxlineWaveform(waveform,compensateResponse = self.parameters()["flux.compensateResponse"],factor = self.parameters()["flux.compensationFactor"])
         self._waveforms["fluxline.base"] = waveform
         
       	return waveform
@@ -324,7 +329,7 @@ class Instr(Instrument):
         else:
           pulse = numpy.zeros(max(1,(length+delay)),dtype = numpy.complex128)
           pulse[delay:delay+length] = height
-        pulse*=numpy.exp(1.0j*angle)
+        pulse*=numpy.exp(1.0j*(angle+self._params["driveRotation"]))
         if "pulses.xy.useDrag" in self.parameters() and self.parameters()["pulses.xy.useDrag"] and ("frequencies.f12" in self.parameters() and self.parameters()['frequencies.f12'] != None) and ("frequencies.f01" in self.parameters() and self.parameters()['frequencies.f01'] != None):
           print "Using DRAG to correct pulse shape..."
           #deriv = numpy.zeros(len(pulse),dtype = numpy.complex128)
@@ -378,12 +383,6 @@ class Instr(Instrument):
         pulse[delay+len(piOver2Pulse)+interval:] = piOver2Pulse
         return self.loadWaveform(pulse,readout = len(piOver2Pulse)*2.0+delay+interval+readoutDelay)
         
-      def setFluxlineDelay(self,delay):
-        offset =  self._params['driveWaitTime']-self._params['fluxlineTriggerDelay']-self._params['fluxlineWaitTime']-self._params["fluxlineAdditionalDelay"]
-        if offset < 0:
-          raise QubitException("Fluxline delay is negative!")
-        self._fluxline.setTriggerDelay(delay+offset)
-        
       def readoutDelay(self):
         return self._params['readoutDelay']
         
@@ -392,7 +391,7 @@ class Instr(Instrument):
         if offset < 0:
           raise QubitException("Readout delay is negative!")
         self._params['readoutDelay'] = float(delay)
-        markers = numpy.zeros((self._repetitionPeriod),dtype = numpy.uint8) + 3
+        markers = numpy.zeros((self._params["repetitionPeriod"]),dtype = numpy.uint8) + 3
 
         markers[self._params['driveWaitTime']+delay:]-=1
         markers[offset+delay:offset+delay+200]-=2
@@ -403,6 +402,12 @@ class Instr(Instrument):
         if "fluxline" in self._waveforms:
           return self._waveforms["fluxline"]
         return []
+        
+      def driveRotation(self):
+        return self._params["driveRotation"]
+        
+      def setDriveRotation(self,rotation):
+        self._params["driveRotation"] = rotation
                 
       def loadFluxlineWaveform(self,waveform,compensateResponse = True,samplingInterval = 1.0,factor = 1.0):
         self._waveforms["fluxline"] = numpy.array(waveform)
@@ -424,17 +429,15 @@ class Instr(Instrument):
         fullWaveform = numpy.zeros((finalLength))-1.0
         fullWaveform[:len(waveform)] = waveform
         fullWaveform[len(waveform):] = waveform[-1]
-        if finalLength in self._fluxlineResponseInterpolations and False:
-          responseFunction = self._fluxlineResponseInterpolations[finalLength]
-        else:
-#          print "Generating fluxline response function of length %d" % finalLength
-          frequencies = numpy.linspace(0,1.0/samplingInterval,finalLength/2+1)
-          interpolation = scipy.interpolate.interp1d(self._fluxlineResponse.column("frequency"),self._fluxlineResponse.column("response_dac")*numpy.power(self._fluxlineResponse.column("response_input_sample"),factor))
-          self._fluxlineResponseInterpolations[finalLength] = interpolation(frequencies)/numpy.power(gaussianFilter(frequencies,cutoff = 0.45),factor)
-          responseFunction = self._fluxlineResponseInterpolations[finalLength]
-        correctedWaveform = numpy.fft.irfft(numpy.fft.rfft(fullWaveform)/responseFunction)
+        
+        frequencies = numpy.linspace(0,1.0/samplingInterval,finalLength/2+1)
+        interpolation = scipy.interpolate.interp1d(self._fluxlineResponse["frequency"],self._fluxlineResponse.column("response_dac")*self._fluxlineResponse.column("response_input_sample"))
+        responseFunction = interpolation(frequencies)
+        
+        correctedWaveform = numpy.fft.irfft(numpy.fft.rfft(fullWaveform)/numpy.power(responseFunction/gaussianFilter(frequencies,cutoff = 0.45),factor))
         correctedWaveform[0] = waveform[0]
         correctedWaveform[-1] = waveform[-1]
+
         if max(correctedWaveform) > 1.0 or min(correctedWaveform) < -1.0:
           raise QubitException("Corrected waveform exceeds maximum range!")
         if simulate:
@@ -450,16 +453,16 @@ class Instr(Instrument):
         if useAWG:
           if samplingInterval != 1.0:
             raise QubitException("Sampling interval for fluxline waveform must be 1 ns when using the AWG for generating the fluxline signal!")
-          if len(waveform) > self._repetitionPeriod - 1000-self._params["driveWaitTime"]:
-            raise QubitException("Fluxline waveform is too long! A maximum length of %g ns is allowed. To increase this value you need to change the repition period of the master AWG or the qubit parameter 'driveWaitTime'." % (self._repetitionPeriod-1000-self._params["driveWaitTime"]))  
+          if len(waveform) > self._params["repetitionPeriod"] - 1000-self._params["driveWaitTime"]:
+            raise QubitException("Fluxline waveform is too long! A maximum length of %g ns is allowed. To increase this value you need to change the repition period of the master AWG or the qubit parameter 'driveWaitTime'." % (self._params["repetitionPeriod"]-1000-self._params["driveWaitTime"]))  
           if self._params["driveWaitTime"]-self._params["fluxlineTriggerDelay"] < 0:
             raise QubitException("Qubit Parameter 'driveWaitTime' is too small to compensate the fluxline delay as given in 'fluxlineTriggerDelay'. Choose at least %d ns of delay." % self._params["fluxlineTriggerDelay"])  
-          markers = numpy.zeros(self._repetitionPeriod-1000,dtype = numpy.uint8) + 3
-          fullWaveform = numpy.zeros(self._repetitionPeriod-1000)+waveform[0]
+          markers = numpy.zeros(self._params["repetitionPeriod"]-1000,dtype = numpy.uint8) + 3
+          fullWaveform = numpy.zeros(self._params["repetitionPeriod"]-1000)+waveform[0]
           fullWaveform[self._params["driveWaitTime"]-self._params["fluxlineTriggerDelay"]:len(waveform)+self._params["driveWaitTime"]-self._params["fluxlineTriggerDelay"]] = waveform
           waveformData = self._awg.writeIntData((fullWaveform+1.0)/2.0*((1<<14)-1),markers)
-          self._fluxline.createWaveform(self._waveformNames["fluxline"],waveformData,"INT")
-          self._fluxline.setWaveform(self._fluxlineChannel,self._waveformNames["fluxline"])
+          self._fluxline.createWaveform(self._params["fluxlineWaveform"],waveformData,"INT")
+          self._fluxline.setWaveform(self._params["fluxlineChannel"],self._params["fluxlineWaveform"])
           
         else:
           delay = self._params["fluxlineWaitTime"]*2
@@ -481,10 +484,9 @@ class Instr(Instrument):
                 fullWaveform[delay+i*multiplier+j] = transformed[i]+(transformed[i+1]-transformed[i])/float(multiplier)*float(j)
             fullWaveform[delay+multiplier*(len(transformed)-1)] = transformed[-1]              
             fullWaveform[:delay] = transformed[0]
-          self._fluxline.writeWaveform(self._fluxlineWaveform,fullWaveform)
-          self._fluxline.setWaveform(self._fluxlineWaveform)
+          self._fluxline.writeWaveform(self._params["fluxlineWaveform"],fullWaveform)
+          self._fluxline.setWaveform(self._params["fluxlineWaveform"])
           self._fluxline.setPeriod(len(fullWaveform)/2.0)
-          self.setFluxlineDelay(0)
           self._outputWaveforms["fluxline"] = fullWaveform
           self.notify("fluxlineWaveform",fullWaveform)
           return fullWaveform
@@ -504,31 +506,31 @@ class Instr(Instrument):
           raise WaveformException("Given waveform is too long!")
           return False
 
-        iChannel = numpy.zeros((self._repetitionPeriod))
-        qChannel = numpy.zeros((self._repetitionPeriod))
+        iChannel = numpy.zeros((self._params["repetitionPeriod"]))
+        qChannel = numpy.zeros((self._params["repetitionPeriod"]))
         safetyMargin = self._params["driveWaitTime"]
         iChannel[safetyMargin:safetyMargin+len(iqWaveform)] = numpy.real(iqWaveform)
         qChannel[safetyMargin:safetyMargin+len(iqWaveform)] = numpy.imag(iqWaveform)
 
         #Flux pulse trigger and readout trigger
         if markers == None:
-          iMarkers = numpy.zeros((self._repetitionPeriod),dtype = numpy.uint8) + 3
-          qMarkers = numpy.zeros((self._repetitionPeriod),dtype = numpy.uint8) + 3
+          iMarkers = numpy.zeros((self._params["repetitionPeriod"]),dtype = numpy.uint8) + 3
+          qMarkers = numpy.zeros((self._params["repetitionPeriod"]),dtype = numpy.uint8) + 3
           iMarkers[1:len(iMarkers)/2]-=3
           qMarkers[len(qMarkers)/2:]-=1
         else:
-          iMarkers = numpy.zeros((self._repetitionPeriod),dtype = numpy.uint8)
-          qMarkers = numpy.zeros((self._repetitionPeriod),dtype = numpy.uint8)
+          iMarkers = numpy.zeros((self._params["repetitionPeriod"]),dtype = numpy.uint8)
+          qMarkers = numpy.zeros((self._params["repetitionPeriod"]),dtype = numpy.uint8)
           iMarkers[safetyMargin:safetyMargin+len(markers)] = numpy.real(markers)
           qMarkers[safetyMargin:safetyMargin+len(markers)] = numpy.real(markers)
 
         iData = self._awg.writeIntData((iChannel+1.0)/2.0*((1<<14)-1),iMarkers)
-        self._awg.createWaveform(self._waveformNames["awg"][0],iData,"INT")
-        self._awg.setWaveform(self._awgChannels[0],self._waveformNames["awg"][0])
+        self._awg.createWaveform(self._params["waveforms"][0],iData,"INT")
+        self._awg.setWaveform(self._awgChannels[0],self._params["waveforms"][0])
 
         qData = self._awg.writeIntData((qChannel+1.0)/2.0*((1<<14)-1),qMarkers)
-        self._awg.createWaveform(self._waveformNames["awg"][1],qData,"INT")
-        self._awg.setWaveform(self._awgChannels[1],self._waveformNames["awg"][1])
+        self._awg.createWaveform(self._params["waveforms"][1],qData,"INT")
+        self._awg.setWaveform(self._awgChannels[1],self._params["waveforms"][1])
 
 
         self._waveforms["drive"] = numpy.array(iqWaveform)
@@ -540,6 +542,8 @@ class Instr(Instrument):
 
         if readout != None:
           self.setReadoutDelay(readout)
+        else:
+          self.setReadoutDelay(len(iqWaveform))
         
         finalIqWaveform = iChannel +1j*qChannel
                 
@@ -552,8 +556,8 @@ class Instr(Instrument):
                 
       def updateWaveforms(self):
         try:
-          iChannel = self._awg.getWaveform(self._waveformNames["awg"][0])
-          qChannel = self._awg.getWaveform(self._waveformNames["awg"][1])
+          iChannel = self._awg.getWaveform(self._params["waveforms"][0])
+          qChannel = self._awg.getWaveform(self._params["waveforms"][1])
         except VisaIOError:
           print "Error when retrieving waveform data..."
         self._outputWaveforms["drive"]["I"]=iChannel._data
@@ -561,7 +565,7 @@ class Instr(Instrument):
         self._outputWaveforms["drive"]["markers"]["I"] = iChannel._markers
         self._outputWaveforms["drive"]["markers"]["Q"] = qChannel._markers
         self.notify("driveWaveform",(self._outputWaveforms["drive"]["I"],self._outputWaveforms["drive"]["Q"],self._outputWaveforms["drive"]["markers"]))
-        self._outputWaveforms["fluxline"] = self._fluxline.readWaveform(self._fluxlineWaveform)
+        self._outputWaveforms["fluxline"] = self._fluxline.readWaveform(self._params["fluxlineWaveform"])
         self.notify("fluxlineWaveform",self._outputWaveforms["fluxline"])
                       
       def setIqOffsetCalibration(self,calibration):
@@ -573,8 +577,8 @@ class Instr(Instrument):
       def Psw(self,ntimes = 20,normalize = False):
         self._acqiris.bifurcationMap(ntimes = ntimes)
         if normalize:
-          return (self._acqiris.Psw()[self._acqirisVariable]-1.0+self._params["readout.p00"])/(-1.0+self._params["readout.p00"]+self._params["readout.p11"])
-        return self._acqiris.Psw()[self._acqirisVariable]
+          return (self._acqiris.Psw()[self._params["acqirisVariable"]]-1.0+self._params["readout.p00"])/(-1.0+self._params["readout.p00"]+self._params["readout.p11"])
+        return self._acqiris.Psw()[self._params["acqirisVariable"]]
         
       def calibrateIqOffset(self,frequency = None,saveCalibration = True,changeFrequency = True):
         """
@@ -606,8 +610,11 @@ class Instr(Instrument):
         self._fluxlineResponse = response
         self._fluxlineResponseInterpolations = dict()
 
-      def initialize(self,awgChannels = [1,2],mwg = "qubit1mwg",fluxlineTriggerDelay = 460,readoutMarkerWaveform = "qubit1qInt",fsp = "fsp",fluxlineResponse = None,iqOffsetCalibration = None,iqPowerCalibration = None,iqSidebandCalibration = None,jba = "jba1",coil = "coil",awg = "awg",fluxline = "afg1",waveforms = ["qubit1i","qubit1q"],variable = 1,acqiris = "acqiris",acqirisVariable = "p1x",triggerDelay = 280,repetitionPeriod = 20000,fluxlineWaveform = "USER1",additionalFluxlineDelay = 0,fluxlineChannel = 1):
+      def initialize(self,awgChannels = [1,2],mwg = "qubit1mwg",fsp = "fsp",fluxlineResponse = None,iqOffsetCalibration = None,iqPowerCalibration = None,iqSidebandCalibration = None,jba = "jba1",coil = "coil",awg = "awg",fluxline = "afg1",variable = 1,acqiris = "acqiris",**kwargs):
+
         manager = pyview.helpers.instrumentsmanager.Manager()
+        defaults = {"driveRotation":0,"acqirisVariable" : "p1x","triggerDelay" : 280,"repetitionPeriod" : 20000,"fluxlineWaveform" : "USER1","additionalFluxlineDelay" : 0,"fluxlineChannel" : 1,"readout" : 8000,"fluxlineTriggerDelay" : 460,"readoutMarkerWaveform" : "qubit1qInt","waveforms" : ["qubit1i","qubit1q"]}
+
         if not hasattr(self,'_params'):
           self._params = dict()
         if not hasattr(self,'_waveforms'):
@@ -618,36 +625,20 @@ class Instr(Instrument):
         self._register = manager.getInstrument("register")
 
         self._outputWaveforms["drive"] = dict()
-        self._acqirisVariable = acqirisVariable
         self._outputWaveforms["drive"]["markers"] = dict()
         
         
         self._params["driveWaitTime"] = 2000
         self._params['fluxlineWaitTime'] = 50
-        self._params["fluxlineTriggerDelay"] = float(fluxlineTriggerDelay)
-        self._params["fluxlineAdditionalDelay"] = float(additionalFluxlineDelay)
-
-        self._params["readoutMarkerWaveform"] = readoutMarkerWaveform
-        self._params["readoutMarkerChannel"] = 1
 
         self._awgChannels = awgChannels
-
-        self._waveformNames = dict()
         
-        self._waveformNames["awg"] = waveforms
-        self._waveformNames["fluxline"] = fluxlineWaveform
-        self._waveformNames["readoutMarker"] = readoutMarkerWaveform
-        
+        for d in [defaults,kwargs]:         
+          for arg in d:
+            self.parameters()[arg] = d[arg]
+                
         self._fluxlineResponseInterpolations = dict()
         self._fluxlineResponse = fluxlineResponse
-
-        self._fluxlineWaveform = fluxlineWaveform
-        self._fluxlineChannel = fluxlineChannel
-        self._repetitionPeriod = repetitionPeriod
-
-        print manager.instrumentNames()
-
-        print manager.getInstrument("jba1")
 
         self._mwg = manager.getInstrument(mwg)
         self._jba = manager.getInstrument(jba)
@@ -672,4 +663,3 @@ class Instr(Instrument):
         self.parameters()["offsetCalibrationData"] = iqOffsetCalibration.filename()
         self.parameters()["sidebandCalibrationData"] = iqSidebandCalibration.filename()
         
-        self.setReadoutDelay(0)
