@@ -15,8 +15,8 @@ def importModule(name,implicit = False):
 
 importModule("config.environment")
 importModule("config.instruments")
-importModule("macros.qubit_functions")
-importModule("macros.iq_level_optimization")
+#importModule("macros.qubit_functions")
+#importModule("macros.iq_level_optimization")
 
 
 print "Initialization done."

@@ -59,6 +59,8 @@ class Instr(Instrument):
         self._params["numberOfPoints"] = 400
         self._params["numberOfSegments"] = 100
         self._params["freqEch"] = 499999999.9999999
+              
+        self._params['nFrequencies']=10
         
         if ___TEST___:
           None
@@ -187,6 +189,13 @@ class Instr(Instrument):
         self.bm.nSegments = self._params["numberOfSegments"]
         self.bm.rotatedWaveform = self._rotatedWaveformArray.ctypes.data
         
+        #We initialize the C++ Frequencies anaysis with the pointers of the numpy arrays that we created to store the frequencies analysis map data.     
+        
+        self.av = acqirislib.Averager()
+        self.av.activeChannels = 15
+
+        self.m = acqirislib.MultiplexedBifurcationMap()
+             
         return self._params
 
       def ConfigureChannel(self,channel,fullscale = None,offset = None,coupling = None,bandwidth = None):
@@ -213,8 +222,8 @@ class Instr(Instrument):
         """
         Calibrates the Acqiris card.
         """
-      
-        options = c_int32(args[0])
+        
+        options = c_int32(CAL_TOUT)
         channels = c_int32(args[0])
         status=self.__acqiris.CalibrateV1(self.__vi_session,options,channels)        
         if status != 0:
@@ -313,7 +322,6 @@ class Instr(Instrument):
         Analyzes the bifurcation behaviour of the JBA.
         """
         self.bm.setRotation(self._params["rotation"][0],self._params["rotation"][1])
-        
         if ntimes != self.nLoops:
           self.nLoops = ntimes
           self.bm.nLoops = self.nLoops
@@ -348,10 +356,13 @@ class Instr(Instrument):
           raise Exception(self.transformErr2Str(status))
         return status
         
-      def DMATransferV1(self,average = 0,tension = 1,delay = 0,*args):        
+      def DMATransferV1(self,average = 0,tension = 1,delay = 0,wf=None, *args):        
         """
         Transfers the data from the Acqiris card to self._waveformArray
         """
+        if wf==None:
+          wf=self._waveformArray
+
         c_used_channels = c_int32(self._params["usedChannels"]) 
         c_number_segments = c_int32(self._params["numberOfSegments"])
         
@@ -367,10 +378,10 @@ class Instr(Instrument):
         c_number_points_returned = c_int32()
         
         status=self.__acqiris.DMATransferV1(self.__vi_session,c_used_channels,c_number_segments,c_number_points,c_average,c_tension,c_delay_time,
-                byref(c_time_stamp),self._waveformArray[0,:].ctypes.data,self._waveformArray[1,:].ctypes.data,self._waveformArray[2,:].ctypes.data,self._waveformArray[3,:].ctypes.data,
+                byref(c_time_stamp),wf[0,:].ctypes.data,wf[1,:].ctypes.data,wf[2,:].ctypes.data,wf[3,:].ctypes.data,
                 byref(c_time_us),byref(c_number_segments_returned),byref(c_number_points_returned)) 
                 
-        return status       
+        return (status,wf)       
         import numpy
         if status != 0:
           raise Exception(self.transformErr2Str(status))
@@ -378,7 +389,67 @@ class Instr(Instrument):
           print number_segments_returned
           self.notify("data",(list(self.waveform_1),list(self.waveform_2),list(self.waveform_3),list(self.waveform_4)))
           
+      def frequenciesAnalysis(self,frequencies=None,Ilist=None,Qlist=None,philist=None,debug=False):
+
+      
+
+        if frequencies==None:
+          self._params['nFrequencies']=self._params['numberOfPoints']
+          self._frequencies=zeros(self._params['nFrequencies'])
+          self._frequencies=arange(0,1,1./self._params['numberOfPoints'])
+        else:
+          self._params['nFrequencies']=len(frequencies)
+          self._frequencies=zeros(self._params['nFrequencies'])
+          self._frequencies[:]=frequencies[:]
+
+        if Ilist==None or Qlist==None:
+          Ilist=zeros(self._params['nFrequencies'])
+          Qlist=zeros(self._params['nFrequencies'])
+          philist=zeros(self._params['nFrequencies'])
+        self._Ilist=Ilist
+        self._Qlist=Qlist
+        self._philist=philist
         
+        self.av.nSegments=self._params['numberOfSegments']
+        self.av.nPoints=self._params["numberOfPoints"]
+        self.av.nFrequencies=self._params["nFrequencies"]
+        self.av.sampleInterval=self._params['sampleInterval']*1E9
+        self._wave=zeros((4,self._params['numberOfSegments'],self._params["numberOfPoints"]))
+        self._components=zeros((4,self._params['numberOfSegments'],self._params["nFrequencies"]))
+        self._averagesF=zeros((4,self._params["nFrequencies"]))
+
+
+        self.av.frequencies=self._frequencies.ctypes.data
+        self.av.Icorrection=self._Ilist.ctypes.data
+        self.av.Qcorrection=self._Qlist.ctypes.data
+        self.av.phicorrection=self._philist.ctypes.data
+        
+        self.av.components=self._components.ctypes.data
+        self.av.averages=self._averagesF.ctypes.data
+
+        self.av.init()
+        
+        if debug:        
+          self._wave=zeros((4,self._params['numberOfSegments'],self._params["numberOfPoints"]))
+          self._wave[0,0,:]=cos(2*math.pi*1e-9*10E6*arange(0,self._params['numberOfPoints']))
+        else:
+           self.AcquireV1(0) 
+           self.DMATransferV1(wf=self._wave)
+
+#        print self.av.sampleInterval
+        self.av.add(self._wave.ctypes.data)
+
+        return (self._wave,self._averagesF,self._components,self._frequencies)
+
+        
+      def multiplexedBifurcationMapAdd(self,co,fr):
+        r=zeros((4,100,1))
+        self.m.add(fr.ctypes.data, co.ctypes.data, 1, 100, r.ctypes.data)
+        return r,co
+        
+      def multiplexedBifurcationMapSetRotation(self, r,Io,Qo,f):
+        self.m.setRotation(r,Io,Qo,f)
+               
       def FinishApplicationV1(self,*args):
         self.__acqiris.FinishApplicationV1(self.__vi_session)
 

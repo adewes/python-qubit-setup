@@ -23,6 +23,9 @@ import numpy
 class Waveform:
 
     def __init__(self):
+      """
+      this is the doc string for the init method...
+      """
       self._name = None
       self._data = None
       self._markers = None
@@ -98,28 +101,57 @@ class Instr(VisaInstrument):
         setups.append(filestr[0])
     return setups
 
-  def writeIntData(self,values,markers):
+  def writeIntData(self,values,markers,useC = True):
     """
     Writes integer data to a string.
+    """    
+    if useC:
+      valuesInt = numpy.zeros(len(values),dtype = numpy.ushort)
+      markersInt = numpy.zeros(len(markers),dtype = numpy.uint8)
+  
+      valuesInt[:] = values[:]
+      markersInt[:] = markers[:]
+
+      buf = ctypes.create_string_buffer(len(valuesInt)*2)
+      numerical.awg_pack_int_data(len(valuesInt),valuesInt.ctypes.data,markersInt.ctypes.data,ctypes.addressof(buf))
+      return buf.raw
+    else:
+      output = ""
+      for i in range(0,len(values)):
+        marker = int(markers[i])
+        value = int(values[i])
+        output+=struct.pack("<H",((marker & 3) << 14) + (value & (0xFFFF >> 2)))
+      return output
+        
+  def loadiqWaveform(self,iqWaveform, channels=(1,2), markers = None,waveformNames=('i','q')):
     """
-    valuesInt = numpy.zeros(len(values),dtype = numpy.ushort)
-    markersInt = numpy.zeros(len(markers),dtype = numpy.uint8)
-
-    valuesInt[:] = values[:]
-    markersInt[:] = markers[:]
-    buf = ctypes.create_string_buffer(len(valuesInt)*2)
-    numerical.awg_pack_int_data(len(valuesInt),valuesInt.ctypes.data,markersInt.ctypes.data,ctypes.addressof(buf))
-    return buf.raw
-
-    #Legacy code...
-
-    output = ""
-    for i in range(0,len(values)):
-      marker = int(markers[i])
-      value = int(values[i])
-      output+=struct.pack("<H",((marker & 3) << 14) + (value & (0xFFFF >> 2)))
-    return output
+    Loads an IQ waveform and 2 marker waveforms into the AWG memory.
+    """
     
+    
+    iChannel = numpy.zeros(len(iqWaveform))
+    qChannel = numpy.zeros(len(iqWaveform))
+    iChannel[:] = numpy.real(iqWaveform)
+    qChannel[:] = numpy.imag(iqWaveform)
+    
+    
+    
+        
+    if markers == None:
+      iMarkers=(numpy.zeros(len(iqWaveform),dtype=numpy.int8),numpy.zeros(len(iqWaveform),dtype=numpy.int8))
+      qMarkers=(numpy.zeros(len(iqWaveform),dtype=numpy.int8),numpy.zeros(len(iqWaveform),dtype=numpy.int8))
+    else:
+      (iMarkers,qMarkers)=markers
+    iData = self.writeIntData((iChannel+1.0)/2.0*((1<<14)-1),iMarkers)
+    self.createWaveform(waveformNames[0],iData,"INT")
+    self.setWaveform(channels[0],waveformNames[0])
+    
+    qData = self.writeIntData((qChannel+1.0)/2.0*((1<<14)-1),qMarkers)
+    self.createWaveform(waveformNames[1],qData,"INT")
+    self.setWaveform(channels[1],waveformNames[1])
+    
+    return len(qData)  
+      
   def writeRealData(self,values,markers):
     """
     Writes real-valued data to a string.

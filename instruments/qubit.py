@@ -181,7 +181,7 @@ class Instr(Instrument):
             self.loadFluxlineWaveform(numpy.array(state['waveformData']['fluxline']),compensateResponse = self._params["fluxline.compensateResponse"],factor = self._params["fluxline.compensationFactor"],samplingInterval = self._params["fluxline.samplingInterval"])
           if 'drive' in state['waveformData']:
             print "Restoring drive waveform..."
-            self.loadWaveform(state['waveformData']['drive'],readout = state['readoutDelay'])
+            self.loadWaveform(state['waveformData']['drive'],readout = state['readout'])
         self._waveforms = state['waveformData']
         del self._params['waveformData']
         
@@ -210,17 +210,23 @@ class Instr(Instrument):
         aI = None
         aQ = None
         if I != None:
-          frequencies = self._optimizer.iqPowerCalibrationData().column("frequency")
-          coeffs = self._optimizer.iqPowerCalibrationData().column("coeffI")
-          iInt = scipy.interpolate.interp1d(frequencies,coeffs)
-          cI = iInt(f)
-          aI = math.sqrt(math.pow(10.0,I/10.0)/cI)
+          if self._optimizer != None:
+            frequencies = self._optimizer.iqPowerCalibrationData().column("frequency")
+            coeffs = self._optimizer.iqPowerCalibrationData().column("coeffI")
+            iInt = scipy.interpolate.interp1d(frequencies,coeffs)
+            cI = iInt(f)
+            aI = math.sqrt(math.pow(10.0,I/10.0)/cI)
+          else:
+            aI = I
         if Q != None:
-          frequencies = self._iqPowerCalibration.column("frequency")
-          coeffs = self._iqPowerCalibration.column("coeffQ")
-          qInt = scipy.interpolate.interp1d(frequencies,coeffs)
-          cQ = qInt(f)
-          aQ = math.sqrt(math.pow(10.0,Q/10.0)/cQ)
+          if self._optimizer != None:
+            frequencies = self._iqPowerCalibration.column("frequency")
+            coeffs = self._iqPowerCalibration.column("coeffQ")
+            qInt = scipy.interpolate.interp1d(frequencies,coeffs)
+            cQ = qInt(f)
+            aQ = math.sqrt(math.pow(10.0,Q/10.0)/cQ)
+          else:
+            aQ = Q
         self.setDriveAmplitude(I = aI,Q = aQ)
 
       def setDriveAmplitude(self,**kwargs):
@@ -242,39 +248,6 @@ class Instr(Instrument):
           return self._waveforms["fluxline.base"]
         return []
         
-      def loadFluxlineBaseWaveform(self,parkFlux = None,manipulationFlux = None,readoutFlux = None,readout = None,compensationFactor = None,compensateResponse = None,readoutDelay = None,waveform = None):
-        if not 'flux.customWaveform' in self.parameters():
-          self.parameters()["flux.customWaveform"] = False
-        if self.parameters()["flux.customWaveform"] and False:
-          waveform = self._waveforms["fluxline.base"]
-        if waveform != None:
-          self._waveforms["fluxline.base"] = waveform
-          self.parameters()["flux.customWaveform"] = True
-        else:
-          self.parameters()["flux.customWaveform"] = False
-          if parkFlux != None:
-            self.parameters()["flux.park"] = float(parkFlux)
-            if compensateResponse != None:
-              self.parameters()["flux.compensateResponse"] = compensateResponse
-            if manipulationFlux != None:
-            	self.parameters()["flux.manipulation"] = float(manipulationFlux)
-            if readoutFlux != None:
-            	self.parameters()["flux.readout"] = float(readoutFlux)
-            if readout != None:
-            	self.parameters()["timing.readout"] = int(readout)
-            if compensationFactor != None:
-            	self.parameters()["flux.compensationFactor"] = float(compensationFactor)
-            if readoutDelay != None:
-              self.parameters()["timing.readoutDelay"] = int(readoutDelay)
-          amp = self._fluxline.amplitude(self._params["fluxlineChannel"])
-          offset = self._fluxline.offset(self._params["fluxlineChannel"])
-          waveform = numpy.zeros(self.parameters()["timing.readout"]+3500)+(self.parameters()["flux.park"]-offset)/amp*2.0
-          waveform[1:-1] = (self.parameters()["flux.manipulation"]-offset)/amp*2.0
-          waveform[self.parameters()["timing.readout"]+self.parameters()["timing.readoutDelay"]:-1] = (self.parameters()["flux.readout"]-offset)/amp*2.0
-        self.loadFluxlineWaveform(waveform,compensateResponse = self.parameters()["flux.compensateResponse"],factor = self.parameters()["flux.compensationFactor"])
-        self._waveforms["fluxline.base"] = waveform
-        
-      	return waveform
       
       def generateZPulse(self,length = None,phase = None,delay = 0,height = None,gaussian = True,flank = 3):
         """
@@ -349,13 +322,16 @@ class Instr(Instrument):
         if f_sb != 0:
           if f_c == None:
             f_c = self.driveFrequency()
-          sidebandPulse = self._optimizer.generateCalibratedSidebandWaveform(f_c = f_c,f_sb = f_sb,length = len(pulse)-delay,delay = sidebandDelay)
+          if self._optimizer != None:
+            sidebandPulse = self._optimizer.generateCalibratedSidebandWaveform(f_c = f_c,f_sb = f_sb,length = len(pulse)-delay,delay = sidebandDelay)
+          else:
+            sidebandPulse = exp(1j*2.*math.pi*f_sb*(arange(0,len(pulse)-delay)+sidebandDelay))
           pulse[delay:]*=sidebandPulse
         seq.addPulse(pulse)
         return seq.getWaveform()
       
       
-      def loadRabiPulse(self,length = None,phase = None,delay = 0,height = 1.0,readout = None,gaussian = True,flank = 3,f_sb = None,angle = 0,sidebandDelay = 0,f_shift = None):
+      def loadRabiPulse(self,length = None,phase = None,delay = 0,height = 1.0,gaussian = True,flank = 3,f_sb = None,angle = 0,sidebandDelay = 0,f_shift = None):
         """
         Loads a Rabi pulse into the AWG memory.
         """
@@ -364,13 +340,10 @@ class Instr(Instrument):
         elif f_sb == None:
           raise QubitException("Error: You must specify a sideband frequency via parameter f_sb!")
         seq = PulseSequence()
-        if readout == None:
-          if not "timing.readout" in self.parameters():
-            raise QubitException("You must define 'timing.readout' in the qubit parameter dictionary if you don't supply a readout time.")
-          readout = self.parameters()["timing.readout"]
         pulseLength = len(self.generateRabiPulse(length = length,phase = phase,height = height,gaussian = gaussian,flank = flank, f_sb = f_sb,angle = angle,f_shift = f_shift))
-        seq.addPulse(self.generateRabiPulse(length = length,phase = phase,height = height,gaussian = gaussian,flank = flank, f_sb = f_sb,angle = angle,delay = readout-pulseLength-delay,f_shift = f_shift))
-        return self.loadWaveform(seq.getWaveform(),readout = readout)
+        seq.addPulse(self.generateRabiPulse(length = length,phase = phase,height = height,gaussian = gaussian,flank = flank, f_sb = f_sb,angle = angle,f_shift = f_shift))
+        seq.addWait(delay)
+        return self.loadWaveform(seq.getWaveform())
         
       def loadRamseyPulse(self,delay = 0,interval = 0,height = 1.0,piLength = 100,spinEcho = False,flank = 1,readoutDelay = 0):
         """
@@ -382,21 +355,6 @@ class Instr(Instrument):
         pulse[delay:len(piOver2Pulse)+delay] = piOver2Pulse
         pulse[delay+len(piOver2Pulse)+interval:] = piOver2Pulse
         return self.loadWaveform(pulse,readout = len(piOver2Pulse)*2.0+delay+interval+readoutDelay)
-        
-      def readoutDelay(self):
-        return self._params['readoutDelay']
-        
-      def setReadoutDelay(self,delay):
-        offset = self._params['driveWaitTime']-self._jba.internalDelay()
-        if offset < 0:
-          raise QubitException("Readout delay is negative!")
-        self._params['readoutDelay'] = float(delay)
-        markers = numpy.zeros((self._params["repetitionPeriod"]),dtype = numpy.uint8) + 3
-
-        markers[self._params['driveWaitTime']+delay:]-=1
-        markers[offset+delay:offset+delay+200]-=2
-        self._awg.updateMarkers(self._params["readoutMarkerWaveform"],markers)
-        self.notify("readoutDelay",self._params["readoutDelay"])
 
       def fluxlineWaveform(self):
         if "fluxline" in self._waveforms:
@@ -502,15 +460,16 @@ class Instr(Instrument):
         The "readout" parameter sets the time at which the qubit should be read out.
         """
 
-        if len(iqWaveform) > self._register["repetitionPeriod"]-self._params["driveWaitTime"]:
+        if len(iqWaveform) + self._params["driveWaitTime"] > self._params["readoutTime"]:
           raise WaveformException("Given waveform is too long!")
           return False
 
         iChannel = numpy.zeros((self._params["repetitionPeriod"]))
         qChannel = numpy.zeros((self._params["repetitionPeriod"]))
         safetyMargin = self._params["driveWaitTime"]
-        iChannel[safetyMargin:safetyMargin+len(iqWaveform)] = numpy.real(iqWaveform)
-        qChannel[safetyMargin:safetyMargin+len(iqWaveform)] = numpy.imag(iqWaveform)
+        offsetTime = self._params["readoutTime"]-len(iqWaveform)
+        iChannel[offsetTime:offsetTime+len(iqWaveform)] = numpy.real(iqWaveform)
+        qChannel[offsetTime:offsetTime+len(iqWaveform)] = numpy.imag(iqWaveform)
 
         #Flux pulse trigger and readout trigger
         if markers == None:
@@ -532,19 +491,13 @@ class Instr(Instrument):
         self._awg.createWaveform(self._params["waveforms"][1],qData,"INT")
         self._awg.setWaveform(self._awgChannels[1],self._params["waveforms"][1])
 
-
         self._waveforms["drive"] = numpy.array(iqWaveform)
         
         self._outputWaveforms["drive"]["I"] = iChannel
         self._outputWaveforms["drive"]["Q"] = qChannel
         self._outputWaveforms["drive"]["markers"]["I"] = iMarkers
         self._outputWaveforms["drive"]["markers"]["Q"] = qMarkers
-
-        if readout != None:
-          self.setReadoutDelay(readout)
-        else:
-          self.setReadoutDelay(len(iqWaveform))
-        
+       
         finalIqWaveform = iChannel +1j*qChannel
                 
         self.notify("driveWaveform",(finalIqWaveform,iMarkers,qMarkers))
@@ -610,7 +563,7 @@ class Instr(Instrument):
         self._fluxlineResponse = response
         self._fluxlineResponseInterpolations = dict()
 
-      def initialize(self,awgChannels = [1,2],mwg = "qubit1mwg",fsp = "fsp",fluxlineResponse = None,iqOffsetCalibration = None,iqPowerCalibration = None,iqSidebandCalibration = None,jba = "jba1",coil = "coil",awg = "awg",fluxline = "afg1",variable = 1,acqiris = "acqiris",**kwargs):
+      def initialize(self,awgChannels = [1,2],mwg = "qubit1mwg",fsp = "fsp",fluxlineResponse = None,iqOffsetCalibration = None,iqPowerCalibration = None,iqSidebandCalibration = None,jba = "jba1",coil = "coil",awg = "awg",fluxline = "afg1",variable = 1,acqiris = "acqiris",readoutTime = 5000,**kwargs):
 
         manager = pyview.helpers.instrumentsmanager.Manager()
         defaults = {"driveRotation":0,"acqirisVariable" : "p1x","triggerDelay" : 280,"repetitionPeriod" : 20000,"fluxlineWaveform" : "USER1","additionalFluxlineDelay" : 0,"fluxlineChannel" : 1,"readout" : 8000,"fluxlineTriggerDelay" : 460,"readoutMarkerWaveform" : "qubit1qInt","waveforms" : ["qubit1i","qubit1q"]}
@@ -630,6 +583,7 @@ class Instr(Instrument):
         
         self._params["driveWaitTime"] = 2000
         self._params['fluxlineWaitTime'] = 50
+        self._params["readoutTime"] = readoutTime
 
         self._awgChannels = awgChannels
         
@@ -652,14 +606,17 @@ class Instr(Instrument):
         sidebandCalibration = Datacube()
         
         k = "calibration.iqmixer.%s.sideband" % self.name()
-        
-        if self._register.hasKey(k):
-          sidebandCalibration.loadtxt(self._register[k])
-
-        self._optimizer = IqOptimization(self._mwg,self._fsp,self._awg,self._awgChannels)
-        self._optimizer.setOffsetCalibrationData(iqOffsetCalibration)
-        self._optimizer.setPowerCalibrationData(iqPowerCalibration)
-        self._optimizer.setSidebandCalibrationData(iqSidebandCalibration)
-        self.parameters()["offsetCalibrationData"] = iqOffsetCalibration.filename()
-        self.parameters()["sidebandCalibrationData"] = iqSidebandCalibration.filename()
-        
+        try:
+          if self._register.hasKey(k):
+            sidebandCalibration.loadtxt(self._register[k])
+  
+          self._optimizer = IqOptimization(self._mwg,self._fsp,self._awg,self._awgChannels)
+          self._optimizer.setOffsetCalibrationData(iqOffsetCalibration)
+          self._optimizer.setPowerCalibrationData(iqPowerCalibration)
+          self._optimizer.setSidebandCalibrationData(iqSidebandCalibration)
+          self.parameters()["offsetCalibrationData"] = iqOffsetCalibration.filename()
+          self.parameters()["sidebandCalibrationData"] = iqSidebandCalibration.filename()
+        except:
+          print "Could not load mixer calibration data!"
+          self._optimizer = None
+          

@@ -58,11 +58,14 @@ class IqOptimization(Reloadable):
     self.updateOffsetCalibrationInterpolation()
     
   def updateOffsetCalibrationInterpolation(self):
-    frequencies = self._offsetCalibrationData.column("frequency")
-    self._iOffsetInterpolation = scipy.interpolate.interp1d(frequencies,self._offsetCalibrationData.column("lowI"))        
-    self._qOffsetInterpolation = scipy.interpolate.interp1d(frequencies,self._offsetCalibrationData.column("lowQ"))
-    
-        
+    if len(self._offsetCalibrationData.column("frequency"))>1:
+      frequencies = self._offsetCalibrationData.column("frequency")
+      self._iOffsetInterpolation = scipy.interpolate.interp1d(frequencies,self._offsetCalibrationData.column("lowI"))        
+      self._qOffsetInterpolation = scipy.interpolate.interp1d(frequencies,self._offsetCalibrationData.column("lowQ"))
+    else:
+      self._iOffsetInterpolation=lambda x:self._offsetCalibrationData.column("lowI")[0]
+      self._qOffsetInterpolation=lambda x:self._offsetCalibrationData.column("lowQ")[0]
+
   
   def powerCalibrationData(self):
     """
@@ -81,7 +84,7 @@ class IqOptimization(Reloadable):
   	self._awg.loadSetup("iq_calibration.awg")
   	self._mwg.restoreState(self._mwgState)
   
-  def setup(self,averaging = 10,reference = 0):
+  def setup(self,averaging = 10,reference = -50):
     """
     Configure the AWG and the FSP for the IQ mixer calibration.
     """
@@ -91,11 +94,11 @@ class IqOptimization(Reloadable):
     self._fsp.write("SENSE1:FREQUENCY:SPAN 0 MHz")
 #    period = int(1.0/self._awg.repetitionRate()*1e9*0.8)
     self._fsp.write("SWE:TIME 2 ms")
-    self._rbw = 300
+    self._rbw = 1000
     self._fsp.write("SENSE1:BAND:RES %f Hz" % self._rbw)
     self._fsp.write("SENSE1:BAND:VIDEO AUTO")
     self._fsp.write("TRIG:SOURCE EXT")
-    self._fsp.write("TRIG:HOLDOFF 0 s")
+    self._fsp.write("TRIG:HOLDOFF 0.02 s")
     self._fsp.write("TRIG:LEVEL 0.5 V")
     self._fsp.write("TRIG:SLOP POS")
     self._fsp.write("SENSE1:AVERAGE:COUNT %d" % averaging)
@@ -142,11 +145,14 @@ class IqOptimization(Reloadable):
       return (0,0)
   
     min_index = argmin(abs(self.sidebandCalibrationData().column("f_c")-f_c))
+    f_c = self.sidebandCalibrationData()["f_c"][min_index]
+    
     
     if min_index == None:
       return (0,0)
     
-    calibrationData = self.sidebandCalibrationData().childrenAt(min_index)[0]
+    calibrationData = self.sidebandCalibrationData().children(f_c = f_c)[0]
+    
     
     rows = calibrationData.search(f_sb = f_sb)
     
@@ -161,8 +167,13 @@ class IqOptimization(Reloadable):
       phi = phiInterpolation(f_sb)
     
     return (c,phi)
-        
 
+  def calibrationParameters(self, f_c, f_sb):    
+    (iO,qO)=(self.iOffset(f_c),self.qOffset(f_c))
+    (c,phi) = self.sidebandParameters(f_c,f_sb)
+    return (iO, qO, c, phi)
+    
+    
   def generateCalibratedSidebandWaveform(self,f_c,f_sb = 0,length = 100,delay = 0):
   
     (c,phi) = self.sidebandParameters(f_c,f_sb)
@@ -244,10 +255,12 @@ class IqOptimization(Reloadable):
     finally:
       self.teardown()
     
-  def calibrateIQOffset(self,frequencyRange = arange(4.5,8.6,0.1)):
+  def calibrateIQOffset(self,frequencyRange = None):
     """
     Calibrate the IQ mixer DC offset.
     """
+    if frequencyRange==None:
+      frequencyRange=[self._mwg.frequency()]
     try:
       self.setup()
       params = dict()
@@ -279,11 +292,14 @@ class IqOptimization(Reloadable):
     finally:
       self.teardown()
       self.updateOffsetCalibrationInterpolation()
-      
-  def calibrateSidebandMixing(self,frequencyRange = arange(4.5,8.6,0.1),sidebandRange = arange(-0.3,0.3,0.1)+0.05):
+    return self._offsetCalibrationData.filename()
+    
+  def calibrateSidebandMixing(self,frequencyRange = None,sidebandRange = arange(-0.5,0.51,0.1)):
     """
     Calibrate the IQ mixer sideband generation.
     """
+    if frequencyRange==None:
+      frequencyRange=[self._mwg.frequency()]
     try:
       self.setup()
       params = dict()
@@ -299,16 +315,21 @@ class IqOptimization(Reloadable):
       for f_c in frequencyRange:
         #We round the center frequency to an accuracy of 1 MHz
         f_c = round(f_c,3)
-        self.setDriveFrequency(f_c)
-        self._awg.setAmplitude(channels[0],1.26)
-        self._awg.setAmplitude(channels[1],1.26)
+        self._mwg.setFrequency(f_c)
+        self._awg.setAmplitude(channels[0],4.5)
+        self._awg.setAmplitude(channels[1],4.5)
+        self._awg.setOffset(channels[0],self.iOffset(f_c))
+        self._awg.setOffset(channels[1],self.qOffset(f_c))
         data = Datacube("f_c = %g GHz" % f_c)
         rowsToDelete = []
-        for i in range(0,len(self._sidebandCalibrationData.column("f_c"))):
-          if abs(self._sidebandCalibrationData.column("f_c")[i]-f_c) < 0.1:
-            rowsToDelete.append(i)
+        try:
+          for i in range(0,len(self._sidebandCalibrationData.column("f_c"))):
+           if abs(self._sidebandCalibrationData.column("f_c")[i]-f_c) < 0.1:
+              rowsToDelete.append(i)
+        except:
+          pass
         self._sidebandCalibrationData.removeRows(rowsToDelete)
-        self._sidebandCalibrationData.addChild(data)
+        self._sidebandCalibrationData.addChild(data, f_c=f_c)
         self._sidebandCalibrationData.set(f_c = f_c)
         self._sidebandCalibrationData.commit()
         for f_sb in sidebandRange: 
@@ -332,7 +353,8 @@ class IqOptimization(Reloadable):
         self._sidebandCalibrationData.savetxt()
     finally:
       self.teardown()
-      
+    return self._sidebandCalibrationData.filename()
+   
   def iOffset(self,f):
     return self._iOffsetInterpolation(f)
     
@@ -351,7 +373,7 @@ class IqOptimization(Reloadable):
     f = self._mwg.frequency()
     self._mwg.turnOn()
     self._fsp.write("SENSE1:FREQUENCY:CENTER %f GHZ" % f)
-    result = scipy.optimize.fmin_powell(lambda x: self.measurePower(x),[0.,0.],full_output = 1,xtol = 0.0001,ftol = 1e-2,maxiter =1500,maxfun =1000, disp=True, retall=True)
+    result = scipy.optimize.fmin_powell(lambda x: self.measurePower(x),[0.,0.],full_output = 1,xtol = 0.0001,ftol = 1e-2,maxiter =500,maxfun =1000, disp=True, retall=True)
     return (result[0],result)
 
   def measureSidebandPower(self,x,f_sb):

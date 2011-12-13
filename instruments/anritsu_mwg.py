@@ -10,6 +10,10 @@ class Trace:
 #This is the baseclass for the Anrtisu MWG. Use the instrumentCopy function of the Instruments manager to create copies of this instrument with different parameters (e.g. GPIB addresses)
 
 class Instr(VisaInstrument):
+
+  """
+  The Anritsu microwave source.
+  """
   
   def saveState(self,name):
     return self.parameters()

@@ -307,9 +307,9 @@ data.setParameters(instrumentManager.parameters())
 data.parameters()["defaultPlot"] = [("flux","zzp1x"),("flux","zzpx1")]
 dataManager.addDatacube(data)
 try:
-	for flux in arange(0.01,0.16,0.001):
+	for flux in arange(0.01,0.16,0.0005):
 		data.set(flux = flux)
-		probs = measureSwapSequence(swapDuration = 60,pulseHeight = flux,delayBeforeTomography = 2,measurements = ["zz"],averaging = 40,state = [[math.pi,0],[0,0]],piLength = piLength,tomographyLength = tomographyLength*0,use12Pulse = False)
+		probs = measureSwapSequence(swapDuration = 60,pulseHeight = flux,delayBeforeTomography = 2,measurements = ["zz"],averaging = 40,state = [[math.pi,0],[math.pi*0,0]],piLength = piLength,tomographyLength = tomographyLength*0,use12Pulse = True)
 		data.set(**probs)
 		data.commit()
 finally:
@@ -337,7 +337,7 @@ finally:
 ##Measure the SWAP as a function of the duration
 initSwapParameters()
 
-fluxAnticrossing = 0.0290
+fluxAnticrossing = 0.0397
 data = Datacube("Quantum Swap vs duration")
 
 data.setParameters(instrumentManager.parameters())
@@ -349,7 +349,7 @@ try:
 	for duration in durations:
 		data.set(duration = duration,cnt = cnt)
 		cnt += 1
-		probs = measureSwapSequence(swapDuration = duration,pulseHeight = fluxAnticrossing,delayBeforeTomography = 0,measurements = ["zz"],averaging = 120,state = [[math.pi,0],[0,0]],piLength = piLength,tomographyLength = tomographyLength*0,use12Pulse = True)
+		probs = measureSwapSequence(swapDuration = duration,pulseHeight = fluxAnticrossing,delayBeforeTomography = 0,measurements = ["zz"],averaging = 120,state = [[math.pi,0],[math.pi*0,0]],piLength = piLength,tomographyLength = tomographyLength*0,use12Pulse = True)
 		data.set(**probs)
 		data.commit()
 finally:

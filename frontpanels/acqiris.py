@@ -7,7 +7,7 @@ from numpy import cos,sin
 from pyview.lib.classes import *
 from pyview.ide.frontpanel import FrontPanel
 from pyview.ide.mpl.canvas import *
-from instruments.acqiris import CAL_TOUT
+#from instruments.acqiris import CAL_TOUT
 
 import datetime
 
@@ -80,7 +80,7 @@ class Panel(FrontPanel):
       """
       Requests a calibration of the Acqiris board.
       """
-      self.instrument.dispatch("CalibrateV1",CAL_TOUT,1)
+      self.instrument.dispatch("CalibrateV1",1)
     
     def plotData(self):
       trends = self.instrument.trends()
@@ -349,8 +349,8 @@ class Panel(FrontPanel):
 
         self.setLayout(self.grid)
         
+        self._updatePlots = False
         #We request the current parameters from the card.
         self.instrument.dispatch("parameters")
         
-        self._updatePlots = False
         

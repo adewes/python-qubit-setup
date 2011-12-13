@@ -15,13 +15,9 @@ from instruments.qubit import *
 reload(sys.modules["instruments.qubit"])
 from instruments.qubit import *
 
-if qubit1==None:
-  qubit1 = instrumentManager.initInstrument('qubit1',"qubit",kwargs = {'fluxlineResponse':fluxline1Response,'fluxlineWaveform':'USER1','fluxline':'afg1','iqOffsetCalibration':qubit1IQOffset,'iqSidebandCalibration':qubit1IQSideband,'iqPowerCalibration':qubit1IQPower,'jba':'jba1',"awgChannels":[1,2],"variable":1,"waveforms":["qubit1iReal","qubit1qReal"],"awg":"awg","mwg":"qubit1mwg"},forceReload = True)
-
-
 instruments = Manager()
 
-def ramsey(qubit,durations,data = None,variable ="p1x",callback = None,angle = 0,averaging = 20,amplitude = 0,f_offset = 0,correctFrequency = False,saveData = True,transition = 01):
+def ramsey(qubit,durations,data = None,variable ="p1x",callback = None,angle = 0,phase = math.pi/2.0,averaging = 20,amplitude = 0,f_offset = 0,correctFrequency = False,saveData = True,transition = 01,use12Pulse = False):
   if data == None:
     data = Datacube()
   data.setParameters(instrumentManager.parameters())
@@ -41,15 +37,15 @@ def ramsey(qubit,durations,data = None,variable ="p1x",callback = None,angle = 0
   baseForm = qubit.fluxlineWaveform()
   if 02 == transition:
     f_offset/=2.0
-  if transition == 12:
+  if transition == 12 or use12Pulse:
     f_carrier = qubit.parameters()["frequencies.f01"]+f_sb
     f_sb_12 = -(qubit.parameters()["frequencies.f12"]-f_carrier)
+    f_sb_12 = qubit.parameters()["pulses.xy.f_sb12"]
     t_pi_12 = qubit.parameters()["pulses.xy.t_pi12"]
-    print f_sb_12,f_sb,t_pi_12
   try:
     for duration in durations:
       seq = PulseSequence()
-      l = len(qubit.generateRabiPulse(phase = math.pi/2.0))
+      l = len(qubit.generateRabiPulse(phase = phase))
       zLen = len(qubit.generateZPulse(length = duration))
       if amplitude != 0:
         zSeq = PulseSequence()
@@ -59,15 +55,18 @@ def ramsey(qubit,durations,data = None,variable ="p1x",callback = None,angle = 0
         qubit.loadFluxlineWaveform(zSeq.getWaveform(),compensateResponse = False)
 
       if transition == 01 or 02 == transition:
-        seq.addPulse(qubit.generateRabiPulse(angle = angle,phase = math.pi/2.0,f_sb = f_sb-f_offset,sidebandDelay = seq.position()))
+        seq.addPulse(qubit.generateRabiPulse(angle = angle,phase = phase,f_sb = f_sb-f_offset,sidebandDelay = seq.position()))
         seq.addWait(zLen)
-        seq.addPulse(qubit.generateRabiPulse(angle = angle,phase = math.pi/2.0,f_sb = f_sb-f_offset,sidebandDelay = seq.position()))
+        seq.addPulse(qubit.generateRabiPulse(angle = angle,phase = phase,f_sb = f_sb-f_offset,sidebandDelay = seq.position()))
       elif transition == 12:
         seq.addPulse(qubit.generateRabiPulse(angle = angle,phase = math.pi,f_sb = f_sb,sidebandDelay = seq.position()))
-        seq.addPulse(qubit.generateRabiPulse(angle = angle,length = t_pi_12/2.0,f_sb = f_sb_12-f_offset,sidebandDelay = seq.position()))
+        seq.addPulse(qubit.generateRabiPulse(angle = angle,length = t_pi_12/2.0*phase/math.pi*2.0,f_sb = f_sb_12-f_offset,sidebandDelay = seq.position()))
         seq.addWait(zLen)
-        seq.addPulse(qubit.generateRabiPulse(angle = angle,length = t_pi_12/2.0,f_sb = f_sb_12-f_offset,sidebandDelay = seq.position()))
+        seq.addPulse(qubit.generateRabiPulse(angle = angle,length = t_pi_12/2.0*phase/math.pi*2.0,f_sb = f_sb_12-f_offset,sidebandDelay = seq.position()))
         seq.addPulse(qubit.generateRabiPulse(angle = angle,phase = math.pi,f_sb = f_sb,sidebandDelay = seq.position()))
+
+      if use12Pulse:
+        seq.addPulse(qubit.generateRabiPulse(angle = angle,phase = t_pi_12,f_sb = f_sb_12,sidebandDelay = seq.position()))
         
       qubit.loadWaveform(seq.getWaveform(endAt = qubit.parameters()["timing.readout"]),readout = qubit.parameters()["timing.readout"])
       if callback != None:
@@ -76,6 +75,8 @@ def ramsey(qubit,durations,data = None,variable ="p1x",callback = None,angle = 0
       data.set(duration = duration)
       data.set(**acqiris.Psw())
       data.commit()
+  except:
+    traceback.print_exc()
   finally:
     if amplitude != 0:
       qubit.popState()
@@ -99,7 +100,7 @@ def ramsey(qubit,durations,data = None,variable ="p1x",callback = None,angle = 0
   return data
 
 
-def rabi(qubit,durations,data = None,variable ="p1x",f_sb = -0.1,amplitude = 1.0,averaging = 20,delay = 0,callback = None,angle = 0,compositePulse = False,gaussian = True,flank = 3,saveData = True):
+def rabi(qubit,durations,data = None,variable ="p1x",f_sb = -0.1,amplitude = 1.0,averaging = 20,delay = 0,use12Pulse = False,callback = None,angle = 0,compositePulse = False,gaussian = True,flank = 3,saveData = True):
   if data == None:
     data = Datacube()
   data.setParameters(instrumentManager.parameters())
@@ -114,11 +115,19 @@ def rabi(qubit,durations,data = None,variable ="p1x",f_sb = -0.1,amplitude = 1.0
       if compositePulse:
         seq = PulseSequence()
         seq.addPulse(qubit.generateRabiPulse(angle = angle,length = duration/2.0,f_sb = f_sb,sidebandDelay = seq.position(),gaussian = gaussian))
-        seq.addWait(10)
+        seq.addWait(0)
         seq.addPulse(qubit.generateRabiPulse(angle = angle,length = duration/2.0,f_sb = f_sb,sidebandDelay = seq.position(),gaussian = gaussian))
         qubit.loadWaveform(seq.getWaveform(endAt = qubit.parameters()["timing.readout"]-delay),readout = qubit.parameters()["timing.readout"])
       else:
-        qubit.loadRabiPulse(flank = flank,angle = angle,length = duration,delay = delay,readout = qubit.parameters()["timing.readout"],f_sb = f_sb,gaussian = gaussian)
+        seq = PulseSequence()
+        seq.addPulse(qubit.generateRabiPulse(angle = angle,length = duration,f_sb = f_sb,sidebandDelay = seq.position(),gaussian = gaussian))
+        if use12Pulse:
+          f_carrier = qubit.parameters()["frequencies.f01"]+f_sb
+          f_sb_12 = -(qubit.parameters()["frequencies.f12"]-f_carrier)
+          t_pi_12 = qubit.parameters()["pulses.xy.t_pi12"]
+          seq.addPulse(qubit.generateRabiPulse(angle = angle,length = t_pi_12,f_sb = f_sb_12,sidebandDelay = seq.position()))
+        qubit.loadWaveform(seq.getWaveform())#endAt = qubit.parameters()["timing.readout"]-delay),readout = qubit.parameters()["timing.readout"])
+        
       if callback != None:
         callback(duration)
       acqiris.bifurcationMap(ntimes = averaging)
@@ -206,9 +215,9 @@ def measureSpectroscopy(qubit,frequencies,data = None,ntimes = 20,amplitude = 1,
   if data == None:
     data = Datacube()
   if measureAtReadout:
-    qubit.loadRabiPulse(length = pulseLength,readout = qubit.parameters()["timing.readout"]+delayAtReadout,f_sb = f_sb,delay = delay,gaussian=gaussian)
+    qubit.loadRabiPulse(length = pulseLength,f_sb = f_sb,delay = delay,gaussian=gaussian)
   else:
-    qubit.loadRabiPulse(length = pulseLength,readout = qubit.parameters()["timing.readout"],f_sb = f_sb,delay = delay,gaussian=gaussian)
+    qubit.loadRabiPulse(length = pulseLength,f_sb = f_sb,delay = delay,gaussian=gaussian)
   qubit.turnOnDrive()
   data.setParameters(dict(data.parameters(),**instrumentManager.parameters()))
   try:
@@ -268,9 +277,12 @@ def spectroscopy(qubit,frequencies,data = None,ntimes = 20,amplitude = 0.1,varia
       data.savetxt()
     return data
   finally:
-    qubit.setDriveFrequency(f_drive)
+    try:
+      qubit.setDriveFrequency(f_drive)
+    except:
+      pass
 
-def parameterSurvey(qubit,jba,values,generator,data = None,ntimes = 20,rabiDurations = arange(0,50,2),freqs = list(arange(5.0,6.5,0.002))+list(arange(7.0,8.3,0.002)),autoRange = False,spectroAmp = 0.1,rabiAmp = 1.0,f_sb = -0.1,variable = "p1x",fastMeasure=False,use12Pulse=False):
+def parameterSurvey(qubit,jba,values,generator,data = None,ntimes = 20,durations = arange(0,50,2),freqs = list(arange(5.0,6.5,0.002))+list(arange(7.0,8.3,0.002)),autoRange = False,spectroAmp = 0.1,rabiAmp = 1.0,f_sb = -0.1,variable = "p1x",fastMeasure=False,use12Pulse=False):
   """
   Measure the characteristic properties of the qubit (T1, Rabi period, transition frequency, readout contrast) for a list of different parameters.
   "params" contains a list of parameters, which are iterated over and passed to the function "generator" at each iteration.
@@ -656,7 +668,7 @@ def T1(qubit,delays,data = None,averaging = 20,variable = "p1x",gaussian = True,
 				if state==2:
 					loadPi012Pulse(qubit,delay=delay)
 				else:
-					qubit.loadRabiPulse(phase = math.pi,readout = qubit.parameters()["timing.readout"],delay = delay,gaussian = gaussian)
+					qubit.loadRabiPulse(phase = math.pi,delay = delay,gaussian = gaussian)
 				acqiris.bifurcationMap(ntimes = averaging)
 				data.set(delay = delay)
 				data.set(**acqiris.Psw())

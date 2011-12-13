@@ -25,7 +25,7 @@ def devectorizeRho(v):
 def spost(A):
 	n = A.shape[0]
 	N = n*n
-	AA = matrix(zeros((N,N)))
+	AA = matrix(zeros((N,N),dtype = complex128))
 	for i in range(0,n):
 		AA[i*n:(i+1)*n,i*n:(i+1)*n] = A.transpose()
 	return AA
@@ -33,7 +33,7 @@ def spost(A):
 def spre(A):
 	n = A.shape[0]
 	N = n*n
-	AA = matrix(zeros((N,N)))
+	AA = matrix(zeros((N,N),dtype = complex128))
 	for i in range(0,n):
 		for j in range(0,n):
 			for k in range(0,n):
@@ -190,7 +190,7 @@ def pauliRotation(phi,x,y,z):
 	)
 
 def reconstructDensityMatrix(measurements,values):
-	cm = matrix(zeros((len(measurements),len(measurements))))
+	cm = matrix(zeros((len(measurements),len(measurements)),dtype = complex128))
 	for i in range(0,len(measurements)):
 		for j in range(i,len(measurements)):
 			tr = trace(measurements[i]*measurements[j])
@@ -198,7 +198,7 @@ def reconstructDensityMatrix(measurements,values):
 			cm[j,i] = tr
 	x = solve(cm,values)
 
-	rho = matrix(zeros(measurements[0].shape))	
+	rho = matrix(zeros(measurements[0].shape,dtype = complex128))	
 	for i in range(0,len(x)):
 		rho+= x[i]*measurements[i]
 	return rho

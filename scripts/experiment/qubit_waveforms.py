@@ -9,13 +9,13 @@ qubit2.loadFluxlineBaseWaveform(parkFlux =1.12,manipulationFlux = 1.12,readoutFl
 
 ##Default working point:
 
-offset = -0.
+offset = -0.	
 
-qubit1.loadFluxlineBaseWaveform(parkFlux = 0.68,manipulationFlux = 1.22+offset,readoutFlux = 0.68,readout = ro,compensationFactor = 0.8,compensateResponse = True,readoutDelay = 0)
-qubit2.loadFluxlineBaseWaveform(parkFlux =1.10,manipulationFlux = 1.6+offset,readoutFlux = 1.10,readout = ro,compensationFactor = 1.2,compensateResponse = True,readoutDelay = 0)
+qubit1.loadFluxlineBaseWaveform(parkFlux = 0.68,manipulationFlux = 1.17+offset,readoutFlux = 0.68,readout = ro,compensationFactor = 0.8,compensateResponse = True,readoutDelay = 0)
+qubit2.loadFluxlineBaseWaveform(parkFlux =1.0,manipulationFlux = 1.56+offset,readoutFlux = 1.0,readout = ro,compensationFactor = 1.2,compensateResponse = True,readoutDelay = 0)
 
 ##Set vflux2 to constant 1.12V:
-qubit2.loadFluxlineBaseWaveform(parkFlux =1.12,manipulationFlux = 1.12,readoutFlux = 1.12,readout = ro,compensationFactor = 1.2,compensateResponse = False,readoutDelay = 0)
+qubit2.loadFluxlineBaseWaveform(parkFlux =1.14,manipulationFlux = 1.12,readoutFlux = 1.14,readout = ro,compensationFactor = 1.2,compensateResponse = False,readoutDelay = 0)
 
 ##Default parking point at 0V:
 

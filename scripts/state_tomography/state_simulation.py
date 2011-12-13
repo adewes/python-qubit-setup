@@ -214,7 +214,7 @@ def fitDensityMatrix(measuredSpins,measuredProbabilities,hot = False,row = None,
 				print sys.exc_info()
 	return densityMatrix	
 
-def calculateCHSH(tomographyData,fit_data=True):
+def calculateCHSH(tomographyData,fit_data=True,detectorFunction = None):
 
 	"""
 	Calculates the value of the CHSH operator of a given dataset.
@@ -222,9 +222,9 @@ def calculateCHSH(tomographyData,fit_data=True):
 
 	print "CHSH..."
 
-	(measuredSpins,measuredProbabilities) = convertDatacubeToSpins(tomographyData,indices1=["q","r"], indices2=["s","t"],saveValues = False,correctDetectorErrors = True,detectorFunction=None)
+	(measuredSpins,measuredProbabilities) = convertDatacubeToSpins(tomographyData,indices1=["q","r"], indices2=["s","t"],saveValues = False,correctDetectorErrors = True,detectorFunction=detectorFunction)
 	
-	(measuredSpinsUncorrected,measuredProbabilitiesUncorrected) = convertDatacubeToSpins(tomographyData,indices1=["q","r"], indices2=["s","t"],saveValues = False,correctDetectorErrors = False,detectorFunction=None,prefix = 'uncorrected_')
+	(measuredSpinsUncorrected,measuredProbabilitiesUncorrected) = convertDatacubeToSpins(tomographyData,indices1=["q","r"], indices2=["s","t"],saveValues = False,correctDetectorErrors = False,detectorFunction=detectorFunction,prefix = 'uncorrected_')
 
 	measuredProbabilities.parameters()["defaultPlot"] = [("duration","zzp00"),("duration","zzp01"),("duration","zzp10"),("duration","zzp11")]
 	

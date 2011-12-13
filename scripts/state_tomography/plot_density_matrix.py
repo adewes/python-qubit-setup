@@ -1,9 +1,12 @@
 from qulib import *
 
-def plotChi(chi,name = "chi",filename = None):
-	fig = figure(name)
-	clf()
-	cla()
+def plotChi(chi,name = None,filename = None):
+	if name != None:
+		fig = figure(name)
+		clf()
+		cla()
+	else:
+		fig = gcf()
 	jet()
 	subplot(131)
 
@@ -53,7 +56,7 @@ def plotPauliSet(measuredSpins = None,densityMatrix = None,row = None,fill = Fal
 	elif densityMatrix != None:
 		for operator in realOperators:
 			values.append(trace(densityMatrix*operator))
-	bar(arange(0,len(values),1),values,edgecolor = (0.4,0.4,0.4),lw = lw,color = ["red"]*3+["green"]*3+["blue"]*9,fill = fill,ls = ls)
+	bar(arange(0,len(values),1),values,edgecolor = (0.4,0.4,0.4),lw = lw,color = ["#AA0000"]*3+["#00AA00"]*3+["#0000AA"]*9,fill = fill,ls = ls)
 	ylabel("mean value")
 	xlim(0,len(values))
 	axhline(1,color = 'black',ls = ':')
@@ -99,9 +102,9 @@ def plotDensityMatrix(densityMatrix,figureName = None,export=None,figureTitle = 
 		ax.add_artist(Line2D([0.5+i,0.5+i],[-1,4],ls = '--',color = 'grey'))
 		for j in range(0,n):
 	
-			v = abs(densityMatrix[i,3-j])
+			v = abs(densityMatrix[3-j,i])
 			r = sqrt(v)*0.9
-			phi = angle(densityMatrix[i,3-j])
+			phi = angle(densityMatrix[3-j,i])
 	
 #			ells[i][j] =Ellipse(xy=(i,j), width=r, height=r, angle=0)
 			ells[i][j] = Rectangle(xy=(i-r/2,j-r/2),width = r,height = r,lw = 0.5)
@@ -137,6 +140,114 @@ def plotDensityMatrix(densityMatrix,figureName = None,export=None,figureTitle = 
 	if export!=None:
 		print "exporting"
 		fig.savefig(export)
+		
+def plotDensityMatricesContour(densityMatrices,figureName = None,export=None,figureTitle = None,annotate = True,labels = [],show = "all"):
+	from numpy import angle
+	from pyview.ide.mpl.backend_agg import figure
+	if figureName != None:
+		fig = figure(figureName)
+	from matplotlib.patches import Ellipse
+	import matplotlib.cm
+	
+	NUM = 250
+
+	#cmap = get_cmap('jet')
+
+	sat = 0.8
+
+	cdict = {'blue': ((0.0, sat, sat),(0.5, 1-sat, 1-sat),(1.0, sat, sat)),'green': ((0.0, 0,0),(0.5, 0,0),(1.0, 0,0)),'red': ((0.0, 1-sat, 1-sat),(0.5,sat,sat),(1,1-sat,1-sat))}
+	my_cmap = matplotlib.colors.LinearSegmentedColormap('my_colormap',cdict,256)
+	cmap = my_cmap
+
+	if figureName != None:
+		clf()
+		cla()
+
+	if figureTitle != None:
+		title(figureTitle)
+	
+	n = densityMatrices[0].shape[0]
+
+	ax = gca()
+	ax.set_aspect('equal')	
+	
+	styles = ["solid","solid"]
+	widths = [0.5,1]
+	colors = ["black",'red',"blue","magenta","green"]
+	
+	for i in range(0,n):
+		if show == "lowerTriangular":
+			ax.add_artist(Line2D([-1,n-i-0.5],[0.5+i,0.5+i],ls = '--',color = 'grey'))	
+			ax.add_artist(Line2D([0.5+i,0.5+i],[-1,n-i-0.5],ls = '--',color = 'grey'))
+		elif show == "upperTriangular":
+			ax.add_artist(Line2D([-1,n],[0.5+i,0.5+i],ls = '--',color = 'grey'))	
+			ax.add_artist(Line2D([0.5+i,0.5+i],[-1,n],ls = '--',color = 'grey'))
+		else:
+			ax.add_artist(Line2D([-1,n],[0.5+i,0.5+i],ls = '--',color = 'grey'))	
+			ax.add_artist(Line2D([0.5+i,0.5+i],[-1,n],ls = '--',color = 'grey'))
+		for j in range(0,n):
+			
+			if show == "lowerTriangular":
+				if j > n-i:
+					continue
+			elif show == "upperTriangular":
+				if j < i:
+					continue
+			
+			if i == n-j-1:
+				rect = Rectangle(xy = [i-0.5,j-0.5],width = 1.0,height = 1.0)
+				rect.set_facecolor([0.9,0.9,0.9])
+				ax.add_artist(rect)
+	
+			plotted = False
+			
+			k = 0
+	
+			for densityMatrix in densityMatrices:
+	
+				v = abs(densityMatrix[n-j-1,i])
+				r = sqrt(v)*0.9
+				phi = angle(densityMatrix[n-j-1,i])
+		
+				e = Ellipse(xy=(i,j), width=r, height=r, angle=0,ls = styles[k%len(styles)],lw = widths[k%len(widths)])
+			
+				fc = cmap((phi+math.pi)/2.0/math.pi)
+				
+				t = Text(x = i+0.5-0.04,va = 'top',ha = 'right',y = j+0.5-0.04,text = "%.2f" % v,size = 'medium' )
+				a = Arrow(x = i-0.45*r*cos(phi)*0,y = j-0.45*r*sin(phi)*0,dx = r*cos(phi)*0.5,dy = r*sin(phi)*0.5,zorder = 10,width = 0.1,fc = colors[k%len(colors)],lw = 0)
+		
+				e.set_clip_box(ax.bbox)
+				e.set_alpha(1.0)
+				e.set_facecolor('none')
+				e.set_edgecolor(colors[k%len(colors)])
+		
+				if v > 0.01:
+					ax.add_artist(a)
+					ax.add_artist(e)
+					plotted = True
+					
+				k+=1
+
+			if plotted:
+				e2 	= Ellipse(xy=(i,j), width=0.025, height=0.025, angle=0)
+				e2.set_facecolor('black')
+				e2.set_zorder(n*n*10)
+				ax.add_artist(e2)
+				
+
+	if annotate and labels != []:
+		yticks(arange(n-1,-1,-1),labels,rotation = -45)
+		xticks(arange(0,n,1),labels,rotation = -45)
+	else:
+		yticks([0,1,2,3],["","","",""])
+		xticks([0,1,2,3],["","","",""])
+
+	xlim(-0.5, n-0.5)
+	ylim(-0.5, n-0.5)
+	
+	if export!=None:
+		print "exporting"
+		fig.savefig(export)
 
 def plotDensityMatrices(matrices,name = "matrices",filename = None,titles = None,**kwargs):
 	figure(name)
@@ -147,15 +258,8 @@ def plotDensityMatrices(matrices,name = "matrices",filename = None,titles = None
 		figtext(0,0,filename)
 	for rho in matrices:
 		subplot(4,4,i)
-		plotDensityMatrix(rho,annotate = False,**kwargs)
+		plotDensityMatricesContour([rho],annotate = False,**kwargs)
 		if not titles == None:
 			title(titles[i-1],fontsize = 6,verticalalignment = 'bottom')
 		i+=1
-	show()
-
-if __name__ == '__main__':
-
-	cla()
-	rho = matrix([[1,0,0,0],[0,1,0,0],[1,0,0,0],[1,0,0,0]])
-	plotDensityMatrix(rho,figureTitle = "rho")
 	show()

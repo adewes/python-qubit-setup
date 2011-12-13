@@ -20,11 +20,7 @@ class Instr(Instrument):
     Returns the parameters of the JBA.
     """
     return self._params
-    
-  def initReadout(self):
-    self.loadReadoutWaveform()
-    self._afg.setTriggerDelay(0)
-    
+        
   def internalDelay(self):
     return self._params["internalDelay"]+self._params["starkPulseLength"]+self._params["starkPulseDelay"]*0
     
@@ -522,4 +518,4 @@ class Instr(Instrument):
     self._attenuator = manager.getInstrument(self._params["attenuator"])
     self._qubitmwg = manager.getInstrument(self._params["qubitmwg"])
       
-    self.loadReadoutWaveform()
+#    self.loadReadoutWaveform()

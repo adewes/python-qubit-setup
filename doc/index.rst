@@ -9,12 +9,10 @@ Welcome to Qubit Project's documentation!
 Contents:
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 0
 
-.. automodule:: instruments
-   :show-inheritance:
-   :members:
-   
+   instruments/index
+      
 Indices and tables
 ==================
 
