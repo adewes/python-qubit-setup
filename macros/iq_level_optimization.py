@@ -92,7 +92,7 @@ class IqOptimization(Reloadable):
     self._awg.saveSetup("iq_calibration.awg")
     self._mwgState = self._mwg.saveState("iq calibration")
     self._fsp.write("SENSE1:FREQUENCY:SPAN 0 MHz")
-#    period = int(1.0/self._awg.repetitionRate()*1e9*0.8)
+    period = int(1.0/self._awg.repetitionRate()*1e9)
     self._fsp.write("SWE:TIME 2 ms")
     self._rbw = 1000
     self._fsp.write("SENSE1:BAND:RES %f Hz" % self._rbw)
@@ -109,6 +109,7 @@ class IqOptimization(Reloadable):
   def setupWaveforms(self):
     self._awg.write("AWGC:RMOD CONT")
     period = int(1.0/self._awg.repetitionRate()*1e9)
+    print period
     waveformOffset = zeros((period))
     waveformActive = zeros((period))+1.0
     waveformPassive = zeros((period))-1.0

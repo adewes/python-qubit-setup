@@ -9,8 +9,16 @@ register=Manager().getInstrument('register')
 
 class Instr(Instrument):
 
-      def generatePulse(self, duration=100, gaussian=False,frequency=12., amplitude=1.,phase=0., allowModifyMWFrequency=False,DelayFromZero=0, useCalibration=True,shape=None):
-        MWFrequency=self._MWSource.frequency()
+      def generatePulse(self, duration=100, gaussian=False,frequency=12., amplitude=1.,phase=0., modifyMWFrequency=False,DelayFromZero=0, useCalibration=True,shape=None):
+        """
+        Generate in the buffer a pulse using parameters sents 
+        Or use the "shape" instead of (duration, amplitude, delayFromZero)
+        """
+        if modifyMWFrequency:
+          self._MWSource.setFrequency(frequency)
+          MWFrequency=frequency
+        else:
+          MWFrequency=self._MWSource.frequency()
         self._MWSource.turnOn()
         f_sb=MWFrequency-frequency
         try:
@@ -25,12 +33,12 @@ class Instr(Instrument):
             pulse[:]=shape[:]
           pulse*=numpy.exp(1.0j*phase)/2
           if useCalibration:
-            (iOffset, qOffset, c, phi)=self._IQMixer.calibrationParameters(f_sb=f_sb, f_c=MWFrequency)
+            calibrationParameters=self._IQMixer.calibrationParameters(f_sb=f_sb, f_c=MWFrequency)
 #            print "iOffset %f, qOffset %f, c %f, phi %f"  % (iOffset, qOffset, c, phi)
-            cr = float(c)*exp(1j*float(phi))
+            cr = float(calibrationParameters['c'])*exp(1j*float(calibrationParameters['phi']))
             sidebandPulse = exp(-1.j*f_sb*2.0*math.pi*(arange(DelayFromZero,DelayFromZero+len(pulse))))+cr*exp(1.j*f_sb*2.0*math.pi*(arange(DelayFromZero,DelayFromZero+len(pulse))))
-            self._AWG.setOffset(self._params["AWGChannels"][0],iOffset)
-            self._AWG.setOffset(self._params["AWGChannels"][1],qOffset)
+            self._AWG.setOffset(self._params["AWGChannels"][0],calibrationParameters['i0'])
+            self._AWG.setOffset(self._params["AWGChannels"][1],calibrationParameters['q0'])
           else:
             sidebandPulse = exp(-1.j*2.0*math.pi*f_sb*(arange(DelayFromZero,DelayFromZero+len(pulse))))
             self._AWG.setOffset(self._params["AWGChannels"][0],0)
@@ -43,6 +51,9 @@ class Instr(Instrument):
         
         
       def sendPulse(self,pulse=None):
+          """
+          Send the pulse in the buffer to the AWG
+          """
           markers=(zeros(register['repetitionPeriod'],dtype=int8),zeros(register['repetitionPeriod'],dtype=int8))
           markers[0][:register['readoutDelay']]=3
           markers[1][:register['readoutDelay']]=3
@@ -52,9 +63,20 @@ class Instr(Instrument):
             self._AWG.loadiqWaveform(iqWaveform=pulse,channels=self._params["AWGChannels"],waveformNames=(self.name()+'i',self.name()+'q'),markers=markers)
           
       def clearPulse(self):
+          """
+          Clear the pulse in the buffer and send an empty pulse in the AWG
+          """
           self.totalPulse[:]=0
           self.sendPulse()
       def gaussianPulse(length = 500,delay = 0,flank = 4,normalize = True,resolution = 1,filterFrequency = 0.2):
+        """
+        Generate a gaussian Pulse !!!! NOT CONFIGURED !!!!
+        """
+        print "U DONT HAVE TO USE GAUSSIAN PULSE ! NOT CONFIGURED !!!!!!!!!!!!!"
+        print "U DONT HAVE TO USE GAUSSIAN PULSE ! NOT CONFIGURED !!!!!!!!!!!!!"
+        print "U DONT HAVE TO USE GAUSSIAN PULSE ! NOT CONFIGURED !!!!!!!!!!!!!"
+        print "U DONT HAVE TO USE GAUSSIAN PULSE ! NOT CONFIGURED !!!!!!!!!!!!!"
+        print "U DONT HAVE TO USE GAUSSIAN PULSE ! NOT CONFIGURED !!!!!!!!!!!!!"
         waveform = numpy.zeros((math.ceil(flank*2)+1+int(math.ceil(length))+math.ceil(delay))*int(1.0/resolution),dtype = numpy.complex128)
         if length == 0:
           return waveform
@@ -78,10 +100,16 @@ class Instr(Instrument):
 
 
 
-      def parameters(self):    
+      def parameters(self):
+        """
+        return the paramters
+        """
         return self._params
 
       def initialize(self, name, MWSource, IQMixer, AWG, AWGChannels):
+        """
+        Initialise the instrument
+        """
         instrumentManager=Manager()
         self._MWSource=instrumentManager.getInstrument(MWSource)
         self._IQMixer=instrumentManager.getInstrument(IQMixer)

@@ -93,4 +93,5 @@ public:
 	void initF(double f);
 	void add(double *frequencies, double *trends, int numberOfFrequencies, int numberOfsegments,double *results);
 	void finish();
+	void convertToProbabilities(int nbQB, int nbSegments, double *r, double *proba);
 };

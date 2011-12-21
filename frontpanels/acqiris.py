@@ -29,8 +29,8 @@ class Panel(FrontPanel):
       """
       Request the generation of a bifurcation map.
       """
-      self.instrument.dispatch("bifurcationMap",ntimes = int(self.ntimes.text()))
-      
+      self.instrument.dispatch("AcquireV1")
+    
     def getParameters(self):
       """
       Reads all the parameter values from the frontpanel and returns them in a dictionary.
@@ -70,7 +70,7 @@ class Panel(FrontPanel):
     
     def requestConfigure(self):
       """
-      Configures the Acqiris board with the parameters that are displayed in the frontend.
+      Configures the Acqiris board with the parameters that aredisplayed in the frontend.
       """
       params = self.getParameters()
       self.instrument.dispatch("ConfigureV2",**params)
@@ -80,14 +80,22 @@ class Panel(FrontPanel):
       """
       Requests a calibration of the Acqiris board.
       """
+      result =  QMessageBox.question(self,"Calibrate?","Do you want to start the calibration of the Acqiris card?",buttons = QMessageBox.Cancel | QMessageBox.Ok)
+      if result != QMessageBox.Ok:
+        return
       self.instrument.dispatch("CalibrateV1",1)
     
     def plotData(self):
       trends = self.instrument.trends()
       averages = self.instrument.averages()
       means = self.instrument.means()
+      if self.transferAverage.isChecked():
+        data = self.instrument.averagedWaveformArray()
+      else:
+        data = self.instrument.waveformArray()
       print "Plotting..."
       params = self.getParameters()
+      self.dataPlot.axes.cla()
       self.averagesPlot.axes.cla()
       self.meansPlot.axes.cla()
       self.trendsPlot.axes.cla()
@@ -95,10 +103,13 @@ class Panel(FrontPanel):
       for i in range(0,4):
         if params["usedChannels"] & (1 << i):
           self.averagesPlot.axes.plot(averages[i,:])
+          if data != None:
+            self.dataPlot.axes.plot(data[i,:])
       for i in range(0,2):
         if params["usedChannels"] & (1*2 << i):
           self.meansPlot.axes.hist(cos(angles[i])*trends[i*2,:]+sin(angles[i])*trends[i*2+1,:],bins = 30)
           self.trendsPlot.axes.plot(cos(angles[i])*trends[i*2,:]+sin(angles[i])*trends[i*2+1,:],-sin(angles[i])*trends[i*2,:]+cos(angles[i])*trends[i*2+1,:],'o')
+      self.dataPlot.draw()
       self.averagesPlot.draw()
       self.meansPlot.draw()
       self.trendsPlot.draw()
@@ -110,7 +121,9 @@ class Panel(FrontPanel):
       if subject==self.instrument:
         if property == "temperature":
           pass
-        elif property == "bifurcationMap":
+        elif property == "AcquireV1":
+          self.instrument.dispatch("DMATransferV1",transferAverage = bool(self.transferAverage.isChecked()))
+        elif property == "DMATransferV1":
           if self.updatePlots.isChecked():
             self._updatePlots = True
         elif property == "parameters":
@@ -153,6 +166,8 @@ class Panel(FrontPanel):
           self.trigSource.setCurrentIndex(int(params["trigSource"]))
         else:
           self.trigSource.setCurrentIndex(0)
+      if "transferAverage" in params:
+        self.transferAverage.setChecked(bool(params["transferAverage"]))
           
     def __init__(self,instrument,parent=None):
         """
@@ -165,21 +180,22 @@ class Panel(FrontPanel):
         self.errorString=QLabel("")
         self.messageString = QLabel("")        
         
-        #Some buttons
- 
-        self.updatePlots = QCheckBox("Autorefresh plots")
-        updateButton = QPushButton("Acquire")
-        configureButton = QPushButton("Configure")
+        #Some buttons and checkboxes
         calibrateButton = QPushButton("Calibrate")
-        plotButton = QPushButton("Update plots")
+        configureButton = QPushButton("Configure")
+        acquireButton = QPushButton("Acquire-transfer")
+        plotButton = QPushButton("Plot")
+        self.updatePlots = QCheckBox("Auto-plot")
+        self.transferAverage = QCheckBox("Transfer average")
 
-        self.connect(updateButton,SIGNAL("clicked()"),self.requestAcquire)
+        self.connect(acquireButton,SIGNAL("clicked()"),self.requestAcquire)
         self.connect(calibrateButton,SIGNAL("clicked()"),self.requestCalibrate)
         self.connect(configureButton,SIGNAL("clicked()"),self.requestConfigure)
         self.connect(plotButton,SIGNAL("clicked()"),self.plotData)
         
         #Some data graphs.
         
+        self.dataPlot = MatplotlibCanvas(width=5, height=4, dpi=100)
         self.averagesPlot = MatplotlibCanvas(width=5, height=4, dpi=100)
         self.meansPlot = MatplotlibCanvas(width=5, height=4, dpi=100)
         self.trendsPlot = MatplotlibCanvas(width=5, height=4, dpi=100)
@@ -191,22 +207,24 @@ class Panel(FrontPanel):
         timer.start()
         self.connect(timer,SIGNAL("timeout()"),self.onTimer)
         
+        self.plotTabs.addTab(self.dataPlot,"Data")
         self.plotTabs.addTab(self.averagesPlot,"Averages")
         self.plotTabs.addTab(self.meansPlot,"Means")
         self.plotTabs.addTab(self.trendsPlot,"Trends")
         
         buttonGrid = QBoxLayout(QBoxLayout.LeftToRight)
         
-        buttonGrid.addWidget(updateButton)
-        buttonGrid.addWidget(configureButton)
         buttonGrid.addWidget(calibrateButton)
+        buttonGrid.addWidget(configureButton)
+        buttonGrid.addWidget(acquireButton)      
         buttonGrid.addWidget(plotButton)
         buttonGrid.addWidget(self.updatePlots)
+        buttonGrid.addWidget(self.transferAverage)
         buttonGrid.addStretch()
 
         #The grid layout that contains the parameters for the different channels.
         self.channelGrid = QGridLayout()
-        self.channelGrid.setSpacing(10)
+        self.channelGrid.setSpacing(5)
         
         #Lists containing the parameters controls of the different channels.
         self.couplings = list()
@@ -218,7 +236,7 @@ class Panel(FrontPanel):
         #Here we generate the parameter controls of the different channels.
         for i in range(0,4):
           
-          activated = QCheckBox("Activated")
+          activated = QCheckBox("Active")
           activated.setChecked(True)
           
           coupling = QComboBox()
@@ -246,11 +264,11 @@ class Panel(FrontPanel):
           self.offsets.append(QLineEdit("0.0"))
           self.channelGrid.addWidget(QLabel("Channel %d" % (i+1)),0,i)
           self.channelGrid.addWidget(activated,1,i)
-          self.channelGrid.addWidget(QLabel("Coupling "+str(i+1)),2,i)
+          self.channelGrid.addWidget(QLabel("Coupling %d" % (i+1)),2,i)
           self.channelGrid.addWidget(self.couplings[i],3,i)
-          self.channelGrid.addWidget(QLabel("Fullscale "+str(i+1)),4,i)
+          self.channelGrid.addWidget(QLabel("Fullscale %d (V)" % (i+1)),4,i)
           self.channelGrid.addWidget(self.fullScales[i],5,i)
-          self.channelGrid.addWidget(QLabel("Offset "+str(i+1)),6,i)
+          self.channelGrid.addWidget(QLabel("Offset %d (V)" % (i+1)),6,i)
           self.channelGrid.addWidget(self.offsets[i],7,i)
           self.channelGrid.addWidget(QLabel("Bandwidth "+str(i+1)),8,i)
           self.channelGrid.addWidget(self.bandwidths[i],9,i)
@@ -260,39 +278,25 @@ class Panel(FrontPanel):
         
         self.sampleInterval = QLineEdit("2e-9")   
              
-        self.paramsGrid.addWidget(QLabel("Sample Interval"),self.paramsGrid.rowCount(),0)
+        self.paramsGrid.addWidget(QLabel("Sampling time (s)"),self.paramsGrid.rowCount(),0)
         self.paramsGrid.addWidget(self.sampleInterval,self.paramsGrid.rowCount(),0)
 
         self.freqEch = QLineEdit("499999999.9999999")        
         
-        self.paramsGrid.addWidget(QLabel("Freq Ech."),self.paramsGrid.rowCount(),0)
+        self.paramsGrid.addWidget(QLabel("Sampling frequency (Hz)"),self.paramsGrid.rowCount(),0)
         self.paramsGrid.addWidget(self.freqEch,self.paramsGrid.rowCount(),0)
-        
-        self.delayTime = QLineEdit("400e-9")        
-        
-        self.paramsGrid.addWidget(QLabel("Delay time (s)"),self.paramsGrid.rowCount(),0)
-        self.paramsGrid.addWidget(self.delayTime,self.paramsGrid.rowCount(),0)
 
         self.numberOfPoints = QLineEdit("250")        
         
-        self.paramsGrid.addWidget(QLabel("Number of points"),self.paramsGrid.rowCount(),0)
+        self.paramsGrid.addWidget(QLabel("Samples/segment"),self.paramsGrid.rowCount(),0)
         self.paramsGrid.addWidget(self.numberOfPoints,self.paramsGrid.rowCount(),0)
         
         self.numberOfSegments = QLineEdit("100")        
 
         self.ntimes = QLineEdit("20")        
         
-        self.paramsGrid.addWidget(QLabel("Number of segments"),self.paramsGrid.rowCount(),0)
+        self.paramsGrid.addWidget(QLabel("Segments/sequence"),self.paramsGrid.rowCount(),0)
         self.paramsGrid.addWidget(self.numberOfSegments,self.paramsGrid.rowCount(),0)
-
-        
-        self.memType = QComboBox()     
-        self.memType.addItem("Default",0)
-        self.memType.addItem("Force Internal",1)
-        self.memType.setCurrentIndex(1)
-           
-        self.paramsGrid.addWidget(QLabel("Memory Type"),self.paramsGrid.rowCount(),0)
-        self.paramsGrid.addWidget(self.memType,self.paramsGrid.rowCount(),0)
 
         self.trigSource = QComboBox()        
         self.trigSource.addItem("External 1",0)
@@ -301,7 +305,7 @@ class Panel(FrontPanel):
         self.trigSource.addItem("Internal 3",3)
         self.trigSource.addItem("Internal 4",4)
         
-        self.paramsGrid.addWidget(QLabel("Trigger"),self.paramsGrid.rowCount(),0)
+        self.paramsGrid.addWidget(QLabel("Trigger source"),self.paramsGrid.rowCount(),0)
         self.paramsGrid.addWidget(self.trigSource,self.paramsGrid.rowCount(),0)
 
         self.trigCoupling = QComboBox()    
@@ -329,14 +333,28 @@ class Panel(FrontPanel):
 
         self.trigLevel = QLineEdit("500.0")        
         
-        self.paramsGrid.addWidget(QLabel("Trigger Level"),self.paramsGrid.rowCount(),0)
+        self.paramsGrid.addWidget(QLabel("Trigger Level (mV)"),self.paramsGrid.rowCount(),0)
         self.paramsGrid.addWidget(self.trigLevel,self.paramsGrid.rowCount(),0)
+        
+        self.delayTime = QLineEdit("400e-9")        
+        
+        self.paramsGrid.addWidget(QLabel("Delay time (s)"),self.paramsGrid.rowCount(),0)
+        self.paramsGrid.addWidget(self.delayTime,self.paramsGrid.rowCount(),0)
 
         self.synchro = QLineEdit("0")
         
-        self.paramsGrid.addWidget(QLabel("Synchro 10 MHz"),self.paramsGrid.rowCount(),0)
+        self.paramsGrid.addWidget(QLabel("External Synch. 10 MHz"),self.paramsGrid.rowCount(),0)
         self.paramsGrid.addWidget(self.synchro,self.paramsGrid.rowCount(),0)
-        self.paramsGrid.addWidget(QLabel("Averaging Count"),self.paramsGrid.rowCount(),0)
+        
+        self.memType = QComboBox()     
+        self.memType.addItem("Default",0)
+        self.memType.addItem("Force Internal",1)
+        self.memType.setCurrentIndex(1)
+           
+        self.paramsGrid.addWidget(QLabel("Memory Type"),self.paramsGrid.rowCount(),0)
+        self.paramsGrid.addWidget(self.memType,self.paramsGrid.rowCount(),0)
+        
+        self.paramsGrid.addWidget(QLabel("Number of sequences"),self.paramsGrid.rowCount(),0)
         self.paramsGrid.addWidget(self.ntimes,self.paramsGrid.rowCount(),0)
 
         #The grid layout of the frontpanel:

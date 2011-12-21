@@ -7,8 +7,8 @@ import sys
 import os
 import os.path
 
-sys.path.append(os.path.realpath('.'))
-sys.path.append(os.path.realpath('../'))
+if not os.path.realpath(__file__+'../../../') in sys.path:
+	sys.path.append(os.path.realpath(__file__+'../../../'))
 
 from pyview.helpers.instrumentsmanager import *
 if 'pyview.lib.datacube' in sys.modules:
@@ -66,29 +66,12 @@ instruments = [
     },
     {
       'name' : 'temperature',
-      'serverAddress': serverAddress
+      'serverAddress': serverAddress,
+      'kwargs' : {}
     },
     {
       'name' : 'helium_level',
       'serverAddress': serverAddress
-    },
-    {
-      'name' : 'cavity_1_mwg',
-      'class' : 'anritsu_mwg',
-      'serverAddress' : serverAddress,
-      'kwargs' : {'name' : 'Cavity 1','visaAddress' : "GPIB0::4"}
-    },
-    {
-      'name' : 'qubit_1_mwg',
-      'class' : 'agilent_mwg',
-      'serverAddress' : serverAddress,
-      'kwargs' : {'name' : 'Qubit 1','visaAddress' : "TCPIP::192.168.0.12"}
-    },
-    {
-      'name' : 'qubit_1_att',
-      'class' : 'yokogawa',
-      'serverAddress' : serverAddress,
-      'kwargs' : {'name' : 'Attenuator Qubit 1','visaAddress' : 'GPIB0::9'}
     },
     {
       'name' : 'acqiris',
@@ -103,40 +86,153 @@ instruments = [
     {
       'name' : 'fsp',
       'serverAddress' : serverAddress
+    },    
+    {
+      'name' : 'MWSource_JBA',
+      'class' : 'anritsu_mwg',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'MWsource JBA','visaAddress' : "GPIB0::4"}
     },
     {
-      'name' : 'qubit1',
-      'class' : 'qubit',
-      'kwargs' : {'fluxlineTriggerDelay':459,'fluxlineResponse':fluxline1Response,'fluxline':'awg2','fluxlineWaveform':'fluxlineQubit1','fluxlineChannel':1,'iqOffsetCalibration':qubit1IQOffset,'iqSidebandCalibration':qubit1IQSideband,'iqPowerCalibration':qubit1IQPower,'jba':'jba1',"awgChannels":[3,4],"variable":1,"waveforms":["qubit1iInt","qubit1qInt"],"awg":"awg","mwg":"qubit_1_mwg"}
+      'name' : 'coil',
+      'class' : 'yokogawa',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'Qubit Coil','visaAddress' : 'GPIB0::10'}
     },
     {
-      'name' : 'MixerJBA',
+      'name' : 'IQMixer_JBA',
       'class' : 'iqmixer',
-      'kwargs' : {'name' : 'MixerJBA', 'MWSource':'cavity_1_mwg', 'AWG':'awg', 'AWGChannels':(1,2), 'fsp':'fsp','realMixer':'mixer1'}
+      'kwargs' : {'name' : 'MixerJBA', 'MWSource':'MWSource_JBA', 'AWG':'awg', 'AWGChannels':(1,2), 'fsp':'fsp'}
     },
+    {
+      'name' : 'IQMixer_QB',
+      'class' : 'iqmixer',
+      'kwargs' : {'name' : 'MixerQB', 'MWSource':'MWSource_QB', 'AWG':'awg', 'AWGChannels':(3,4), 'fsp':'fsp'}
+    },
+    {
+      'name' : 'PA_JBA',
+      'class' : 'pulse_analyser',
+      'kwargs' : {'name' : 'Pulse analyser JBA', 'MWSource':'MWSource_JBA', 'acqiris':'acqiris', 'pulse_generator':'PG_JBA'}
+    },
+    {
+      'name':'PG_QB',
+      'class':'pulse_generator',
+      'kwargs':{'name':'Pulse Generator QB', 'MWSource':'MWSource_QB', 'IQMixer':'IQMixer_QB', 'AWG':'awg', 'AWGChannels':(3,4)}
+    }, 
+    {
+      'name':'PG_JBA',
+      'class':'pulse_generator',
+      'kwargs':{'name':'Pulse Generator JBA', 'MWSource':'MWSource_JBA', 'IQMixer':'IQMixer_JBA', 'AWG':'awg', 'AWGChannels':(1,2)}
+    },    
+    {
+      'name' : 'MWSource_QB',
+      'class' : 'agilent_mwg',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'MWSource QB','visaAddress' : "TCPIP::192.168.0.12"}
+    },
+    
+    
+    
+    {
+      'name' : 'JBA_Att',
+      'class' : 'yokogawa',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'Attenuator JBA','visaAddress' : 'GPIB0::9'}
+    },
+    {
+      'name':'jba_QB1',
+      'class':'jba_sb',
+      'kwargs':{'name':'JBA 1','generator':'PG_JBA','analyser':'PA_JBA'}
+    },
+    {
+      'name':'jba_QB2',
+      'class':'jba_sb',
+      'kwargs':{'name':'JBA 2','generator':'PG_JBA','analyser':'PA_JBA'}
+    },
+    {
+      'name':'jba_QB3',
+      'class':'jba_sb',
+      'kwargs':{'name':'JBA 3','generator':'PG_JBA','analyser':'PA_JBA'}
+    },
+    {
+      'name':'jba_QB4',
+      'class':'jba_sb',
+      'kwargs':{'name':'JBA 4','generator':'PG_JBA','analyser':'PA_JBA'}
+    },
+    {
+      'name':'Qubit1',
+      'class':'qubit',
+      'kwargs':{'name':'Qubit 1','jba':'jba_QB1','pulseGenerator':'PG_QB'}
+    },
+    {
+      'name':'Qubit2',
+      'class':'qubit',
+      'kwargs':{'name':'Qubit 2','jba':'jba_QB2','pulseGenerator':'PG_QB'}
+    },
+    {
+      'name':'Qubit3',
+      'class':'qubit',
+      'kwargs':{'name':'Qubit 3','jba':'jba_QB3','pulseGenerator':'PG_QB'}
+    },
+    {
+      'name':'Qubit4',
+      'class':'qubit',
+      'kwargs':{'name':'Qubit 4','jba':'jba_QB4','pulseGenerator':'PG_QB'}
+    }
+]
+
+instruments_subset = [
+    {
+      'name' : 'register',
+      'serverAddress': serverAddress
+    },
+    {
+      'name' : 'vna',
+      'gpibAddress': "GPIB0::6"
+    },
+    {
+      'name' : 'temperature',
+      'serverAddress': serverAddress,
+      'kwargs' : {}
+    },
+    {
+      'name' : 'helium_level',
+      'serverAddress': serverAddress
+    },
+    {
+      'name' : 'acqiris',
+      'serverAddress' : 'rip://192.168.0.22:8000',
+      'kwargs' : {'name': 'Acqiris Card'}
+    },
+    {
+      'name' : 'coil',
+      'class' : 'yokogawa',
+      'serverAddress' : serverAddress,
+      'kwargs' : {'name' : 'Qubit Coil','visaAddress' : 'GPIB0::10'}
+    },
+]
+
+unused = [
     {
       'name' : 'MWpulse_gene_JBA1',
       'class' : 'pulse_generator',
       'kwargs' : {'name' : 'Pulse generator JBA 1', 'MWSource':'cavity_1_mwg', 'IQMixer':'MixerJBA', 'AWG':'awg', 'AWGChannels':(1,2)}
     },
     {
-      'name' : 'Pulse_Analyser_JBA1',
-      'class' : 'pulse_analyser',
-      'kwargs' : {'name' : 'Pulse analyser JBA 1', 'MWSource':'cavity_1_mwg', 'acqiris':'acqiris', 'pulse_generator':'MWpulse_gene_JBA1','realMixer':'mixer2'}
-    },
-    {
       'name' : 'JBA1',
       'class' : 'jba_sb',
       'kwargs' : {'name' : 'JBA 1', 'generator':'MWpulse_gene_JBA1' , 'analyser':'Pulse_Analyser_JBA1'}
-    }
-]
-
-unused = [
+    },
     {
       'name' : 'afg3',
       'class' : 'afg',
       'serverAddress' : serverAddress,
       'kwargs' : {"visaAddress": "TCPIP0::192.168.0.5::inst0","name": "AFG 2, Channel 1"}
+    },
+    {
+      'name' : 'qubit1',
+      'class' : 'qubit',
+      'kwargs' : {'fluxlineTriggerDelay':459,'fluxlineResponse':fluxline1Response,'fluxline':'awg2','fluxlineWaveform':'fluxlineQubit1','fluxlineChannel':1,'iqOffsetCalibration':qubit1IQOffset,'iqSidebandCalibration':qubit1IQSideband,'iqPowerCalibration':qubit1IQPower,'jba':'jba1',"awgChannels":[3,4],"variable":1,"waveforms":["qubit1iInt","qubit1qInt"],"awg":"awg","mwg":"qubit_1_mwg"}
     },
     {
       'name' : 'afg4',

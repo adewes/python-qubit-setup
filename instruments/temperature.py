@@ -19,7 +19,7 @@ class Instr(Instrument):
         params['temperature'] = self.temperature()
         return params
 
-      def initialize(self,address = "132.166.16.116", port = 444):
+      def initialize(self,address = "132.166.19.2", port = 444):
         try:
           self._name = "Temperature sensor"
           if DEBUG:

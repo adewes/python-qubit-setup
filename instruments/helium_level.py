@@ -19,7 +19,7 @@ class Instr(Instrument):
         params['heliumLevel'] = self.heliumLevel()
         return params
 
-      def initialize(self,address = "132.166.16.116", port = 449):
+      def initialize(self,address = "132.166.19.2", port = 449):
         try:
           self._name = "Helium level meter"
           self.host = address

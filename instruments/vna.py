@@ -24,7 +24,6 @@ class Instr(VisaInstrument):
     def initialize(self,visaAddress = "GPIB::15",name = "VNA"):
         self._name = "Anritsu VNA"
         print "Initializing with resource %s" % visaAddress
-        self.timeOut=20
         if DEBUG:
           print "Initializing VNA"
         try:
@@ -145,13 +144,13 @@ class Instr(VisaInstrument):
   	  return float(self.ask("RDD?"))
 
     #Get a trace from the instrument and store it to a local array.
-    def getTrace(self,correctPhase = False,waitFullSweep = False):
+    def getTrace(self,correctPhase = False,waitFullSweep = False,timeOut = 200):
       print "Getting trace..."
       trace = Datacube()
       if DEBUG:
         print "Getting trace..."
       handle = self.getHandle()
-      handle.timeout = self.timeOut
+      handle.timeout = timeOut
       if waitFullSweep:
 #        freqs = self.ask_for_values("HLD;TRS;WFS;fma;msb;OFV;") 2011/12 VS 
         self.write("TRS;WFS;")

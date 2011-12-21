@@ -200,8 +200,8 @@ class Instr(VisaInstrument):
     """
     Returns the output state of the instrument.
     """
-    return self.ask("OUTPUT%d:STATE?" % channel)
-    
+    return self.ask("OUTPUT%d:STATE?" % channel) 
+       
   def setState(self,channel,state):
     """
     Sets the output state of the instrument.
@@ -210,7 +210,14 @@ class Instr(VisaInstrument):
     if state == True:
       buf = "ON"
     self.write("OUTPUT%d:STATE %s" % (channel,buf))
-    
+
+  def startAllChannels(self):
+    """
+    Start all the channels
+    """
+    for i in [1,2,3,4]:
+      self.setState(1,True) 
+  
   def channels(self):
     """
     Returns the number of channels of the instrument.

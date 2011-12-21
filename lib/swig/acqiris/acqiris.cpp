@@ -287,3 +287,17 @@ void MultiplexedBifurcationMap::add(double *f, double *trends, int numberOfFrequ
 
 	}
 }
+void MultiplexedBifurcationMap::convertToProbabilities(int nbQB, int nbSegments, double *r, double *proba)
+{
+	int i;
+	int qb;
+	for(i =0; i<nbSegments, i++)
+	{
+		value=0;
+		for(qb=0; qb<nbQb; qb++)
+		{
+			value+=pow(2,(nbQb-qb))*r[qb+i*nbQb]
+		}
+		proba[value]+=1./nSegments
+	}
+}

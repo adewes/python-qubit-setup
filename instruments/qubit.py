@@ -14,7 +14,7 @@ if 'macros.iq_level_optimization' in sys.modules:
 
 from macros.iq_level_optimization import IqOptimization
 from pyview.lib.datacube import Datacube
-  
+
 class WaveformException(Exception):
   pass
   
@@ -563,60 +563,20 @@ class Instr(Instrument):
         self._fluxlineResponse = response
         self._fluxlineResponseInterpolations = dict()
 
-      def initialize(self,awgChannels = [1,2],mwg = "qubit1mwg",fsp = "fsp",fluxlineResponse = None,iqOffsetCalibration = None,iqPowerCalibration = None,iqSidebandCalibration = None,jba = "jba1",coil = "coil",awg = "awg",fluxline = "afg1",variable = 1,acqiris = "acqiris",readoutTime = 5000,**kwargs):
-
-        manager = pyview.helpers.instrumentsmanager.Manager()
-        defaults = {"driveRotation":0,"acqirisVariable" : "p1x","triggerDelay" : 280,"repetitionPeriod" : 20000,"fluxlineWaveform" : "USER1","additionalFluxlineDelay" : 0,"fluxlineChannel" : 1,"readout" : 8000,"fluxlineTriggerDelay" : 460,"readoutMarkerWaveform" : "qubit1qInt","waveforms" : ["qubit1i","qubit1q"]}
-
+      def initialize(self, jba, pulseGenerator):
+        manager=Manager()
         if not hasattr(self,'_params'):
           self._params = dict()
-        if not hasattr(self,'_waveforms'):
-          self._waveforms = dict()
-        self._outputWaveforms = dict()
-        self._inputWaveforms = dict()
-
-        self._register = manager.getInstrument("register")
-
-        self._outputWaveforms["drive"] = dict()
-        self._outputWaveforms["drive"]["markers"] = dict()
+        self._params['jba']=jba
+        self._jba=manager.getInstrument(jba)
+        self._params['pulseGenerator']=pulseGenerator
+        self._pulseGenerator=manager.getInstrument(pulseGenerator)
+      
+      def loadRabiPulse2(self, frequency, duration=250, amplitude=1., phase=0., gaussian=False, delayFromZero=None):
+        if delayFromZero==None:
+          delayFromZero=register.parameters()['readoutDelay']-duration
+        self._pulseGenerator.generatePulse(frequency=frequency, duration=duration, amplitude=amplitude, phase=phase, gaussian=gaussian, allowModifyMWFrequency=False, delayFromZero=delayFromZero)
+     
         
+      
         
-        self._params["driveWaitTime"] = 2000
-        self._params['fluxlineWaitTime'] = 50
-        self._params["readoutTime"] = readoutTime
-
-        self._awgChannels = awgChannels
-        
-        for d in [defaults,kwargs]:         
-          for arg in d:
-            self.parameters()[arg] = d[arg]
-                
-        self._fluxlineResponseInterpolations = dict()
-        self._fluxlineResponse = fluxlineResponse
-
-        self._mwg = manager.getInstrument(mwg)
-        self._jba = manager.getInstrument(jba)
-        self._fsp = manager.getInstrument(fsp)
-        self._awg = manager.getInstrument(awg)
-        self._acqiris = manager.getInstrument(acqiris)
-        self._variable = variable
-        self._coil = manager.getInstrument(coil)
-        self._fluxline = manager.getInstrument(fluxline)
-
-        sidebandCalibration = Datacube()
-        
-        k = "calibration.iqmixer.%s.sideband" % self.name()
-        try:
-          if self._register.hasKey(k):
-            sidebandCalibration.loadtxt(self._register[k])
-  
-          self._optimizer = IqOptimization(self._mwg,self._fsp,self._awg,self._awgChannels)
-          self._optimizer.setOffsetCalibrationData(iqOffsetCalibration)
-          self._optimizer.setPowerCalibrationData(iqPowerCalibration)
-          self._optimizer.setSidebandCalibrationData(iqSidebandCalibration)
-          self.parameters()["offsetCalibrationData"] = iqOffsetCalibration.filename()
-          self.parameters()["sidebandCalibrationData"] = iqSidebandCalibration.filename()
-        except:
-          print "Could not load mixer calibration data!"
-          self._optimizer = None
-          
