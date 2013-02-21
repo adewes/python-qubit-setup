@@ -11,7 +11,7 @@ The repository is organized in the following way:
 * *doc*: Contains the (still incomplete) documentation of the instrument classes and methods
 * *frontpanels*: Contains the graphical frontpanels of all instruments used in the setup, which were realized using PyQT.
 * *instruments*: Contains the instrument classes for all real and virtual instruments used in the measurement setup.
-* *lib*: Contains several libraries used for acquiring and processing data, most notably the *Datacube* class, which is used as a universal data container.
+* *lib*: Contains several libraries used for acquiring and processing data and interfacing Python and C++ libraries.
 * *macros*: (Obsolete) measurement macros
 * *scripts*: Measurement and data processing scripts.
 * *test*: (Largeley incomplete) test scripts for the instrument classes.
