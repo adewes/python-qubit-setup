@@ -39,9 +39,9 @@ The repository is organized in the following way:
 * *server* contains server scripts that implement a fully transparent remote control scheme for measurement instruments over the network using Python.
 * *test* contains various test scripts. 
 
-##Usage
+##Requirements
 
-The package is designed to be modular, so you can use most of the components individually. Check out the *scripts* directory for some examples.
+Individual classes require a subset of the *PyQt*, *numpy*, *scipy*, *pyvisa*, *pyyaml* and *hdf5* packages to run.
 
 ##Terms of Usage
 
